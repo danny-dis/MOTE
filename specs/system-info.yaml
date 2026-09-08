@@ -1,6 +1,7 @@
 name: system-info
 capabilities: [shell]
 max_iterations: 10
-model: "groq/compound-mini"
-endpoint: "https://api.groq.com/openai/v1/chat/completions"
+model: "gemini-3.5-flash"
+endpoint: ""
 auth: "***REMOVED***"
+provider: "google"

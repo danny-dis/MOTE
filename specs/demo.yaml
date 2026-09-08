@@ -1,6 +1,7 @@
 name: demo
 capabilities: [shell, read_file, write_file, list_dir, git]
 max_iterations: 10
-model: "llama-3.3-70b-versatile"
-endpoint: "https://api.groq.com/openai/v1/chat/completions"
+model: "gemini-3.5-flash"
+endpoint: ""
 auth: "***REMOVED***"
+provider: "google"

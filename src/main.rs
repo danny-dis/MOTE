@@ -15,7 +15,11 @@ struct Manifest {
     endpoint: String,
     #[serde(default = "default_auth")]
     auth: String,
+    #[serde(default = "default_provider")]
+    provider: String,
 }
+
+fn default_provider() -> String { "openai".into() }
 
 fn default_max_iters() -> usize { 20 }
 fn default_model() -> String { "groq/compound-mini".into() }
@@ -89,30 +93,96 @@ impl Model for CurlModel {
                     .and_then(|v| v.pointer("/choices/0/message/content").cloned())
                     .and_then(|v| v.as_str().map(String::from))
                     .unwrap_or_default();
-                let lower = content.to_lowercase();
-                if lower.starts_with("complete:") {
-                    Action::Complete { summary: content[9..].trim().into() }
-                } else if lower.starts_with("shell:") {
-                    Action::Shell { command: content[6..].trim().into() }
-                } else if lower.starts_with("read_file:") {
-                    Action::ReadFile { path: content[10..].trim().into() }
-                } else if lower.starts_with("write_file:") {
-                    let rest = &content[11..];
-                    if let Some((path, content_text)) = rest.split_once('|') {
-                        Action::WriteFile { path: path.trim().into(), content: content_text.trim().into() }
-                    } else {
-                        Action::Complete { summary: "write_file format: path | content".into() }
-                    }
-                } else if lower.starts_with("list_dir:") {
-                    Action::ListDir { path: content[9..].trim().into() }
-                } else if lower.starts_with("git:") {
-                    Action::Git { args: content[4..].trim().into() }
-                } else {
-                    Action::Complete { summary: content.into() }
-                }
+                parse_action(&content)
             }
             Err(e) => Action::Complete { summary: format!("model error: {}", e) },
         }
+    }
+}
+
+// ── Google Gemini adapter ────────────────────────────────────────────
+struct GoogleModel {
+    model: String,
+    auth: String,
+}
+
+impl GoogleModel {
+    fn new(model: &str, auth: &str) -> Self {
+        Self { model: model.into(), auth: auth.into() }
+    }
+
+    fn post(&self, body: &str) -> Result<String, String> {
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            self.model, self.auth
+        );
+        let mut cmd = Command::new("curl");
+        cmd.arg("-s")
+            .arg("-X").arg("POST")
+            .arg("-H").arg("Content-Type: application/json")
+            .arg("-d").arg(body)
+            .arg(&url);
+        let output = cmd.output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+}
+
+impl Model for GoogleModel {
+    fn infer(&self, prompt: &str) -> Action {
+        let system = "You are MOTE. You MUST use the available capabilities to gather information before completing.\n\
+                      NEVER use 'complete:' on the first turn. ALWAYS use at least one capability first.\n\
+                      Respond with EXACTLY ONE line in one of these formats:\n\
+                      shell: <command>\n\
+                      read_file: <path>\n\
+                      write_file: <path> | <content>\n\
+                      list_dir: <path>\n\
+                      git: <args>\n\
+                      complete: <summary>\n\
+                      Nothing else. No explanations.";
+        let body = format!(
+            r#"{{"contents":[{{"parts":[{{"text":"{}"}}]}},{{"parts":[{{"text":"{}"}}]}}]}}"#,
+            system.replace('"', "\\\"").replace('\n', " "),
+            prompt.replace('"', "\\\"").replace('\n', " ")
+        );
+        match self.post(&body) {
+            Ok(text) => {
+                let content = serde_json::from_str::<serde_json::Value>(&text)
+                    .ok()
+                    .and_then(|v| v.pointer("/candidates/0/content/parts/0/text").cloned())
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default();
+                parse_action(&content)
+            }
+            Err(e) => Action::Complete { summary: format!("model error: {}", e) },
+        }
+    }
+}
+
+fn parse_action(content: &str) -> Action {
+    let lower = content.to_lowercase();
+    if lower.starts_with("complete:") {
+        Action::Complete { summary: content[9..].trim().into() }
+    } else if lower.starts_with("shell:") {
+        Action::Shell { command: content[6..].trim().into() }
+    } else if lower.starts_with("read_file:") {
+        Action::ReadFile { path: content[10..].trim().into() }
+    } else if lower.starts_with("write_file:") {
+        let rest = &content[11..];
+        if let Some((path, content_text)) = rest.split_once('|') {
+            Action::WriteFile { path: path.trim().into(), content: content_text.trim().into() }
+        } else {
+            Action::Complete { summary: "write_file format: path | content".into() }
+        }
+    } else if lower.starts_with("list_dir:") {
+        Action::ListDir { path: content[9..].trim().into() }
+    } else if lower.starts_with("git:") {
+        Action::Git { args: content[4..].trim().into() }
+    } else {
+        Action::Complete { summary: content.into() }
     }
 }
 
@@ -402,8 +472,11 @@ fn main() {
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
     println!("---");
-    let model = CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth);
-    let mut rt = Runtime::new(&model, &manifest);
+    let model: Box<dyn Model> = match manifest.provider.as_str() {
+        "google" => Box::new(GoogleModel::new(&manifest.model, &manifest.auth)),
+        _ => Box::new(CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth)),
+    };
+    let mut rt = Runtime::new(&*model, &manifest);
     let final_state = rt.run(task);
     println!("---");
     for ev in &rt.events { println!("{:?}", ev); }
@@ -427,6 +500,7 @@ mod tests {
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(),
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("test task");
@@ -445,6 +519,7 @@ mod tests {
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(),
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("loop");
@@ -461,6 +536,7 @@ mod tests {
             model: "test".into(),
             endpoint: "http://localhost".into(),
             auth: String::new(),
+            provider: String::new(),
         };
         let rt = Runtime::new(&m, &manifest);
         assert_eq!(rt.capabilities.len(), 3);
@@ -477,6 +553,7 @@ mod tests {
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(),
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("repeat");
