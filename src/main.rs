@@ -20,7 +20,6 @@ struct Manifest {
 }
 
 fn default_provider() -> String { "openai".into() }
-
 fn default_max_iters() -> usize { 20 }
 fn default_model() -> String { "groq/compound-mini".into() }
 fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
@@ -56,7 +55,7 @@ impl CurlModel {
         cmd.arg("-s")
             .arg("-X").arg("POST")
             .arg("-H").arg("Content-Type: application/json")
-            .arg("-H").arg(format!("Authorization: {}", self.auth))
+            .arg("-H").arg(format!("Authorization: Bearer {}", self.auth))
             .arg("-d").arg(body)
             .arg(&self.endpoint);
         let output = cmd.output().map_err(|e| e.to_string())?;
@@ -170,7 +169,7 @@ impl Model for GoogleModel {
                       git: log -3\n\
                       After observing results, you may use complete: <summary> to finish.";
         let body = format!(
-            r#"{{"contents":[{{"parts":[{{"text":"{}]}}]}},{{"parts":[{{"text":"{}]}}]}}]}}"#,
+            r#"{{"contents":[{{"parts":[{{"text":"{}"}}]}},{{"parts":[{{"text":"{}"}}]}}]}}"#,
             system.replace('"', "\\\"").replace('\n', " "),
             prompt.replace('"', "\\\"").replace('\n', " ")
         );
@@ -179,6 +178,80 @@ impl Model for GoogleModel {
                 let content = serde_json::from_str::<serde_json::Value>(&text)
                     .ok()
                     .and_then(|v| v.pointer("/candidates/0/content/parts/0/text").cloned())
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default();
+                parse_action(&content)
+            }
+            Err(e) => Action::Complete { summary: format!("model error: {}", e) },
+        }
+    }
+}
+
+// ── Anthropic adapter ────────────────────────────────────────────────
+struct AnthropicModel {
+    model: String,
+    auth: String,
+}
+
+impl AnthropicModel {
+    fn new(model: &str, auth: &str) -> Self {
+        Self { model: model.into(), auth: auth.into() }
+    }
+
+    fn post(&self, body: &str) -> Result<String, String> {
+        let mut cmd = Command::new("curl");
+        cmd.arg("-s")
+            .arg("-X").arg("POST")
+            .arg("-H").arg("Content-Type: application/json")
+            .arg("-H").arg("anthropic-version: 2023-06-01")
+            .arg("-H").arg(format!("x-api-key: {}", self.auth))
+            .arg("-d").arg(body)
+            .arg("https://api.anthropic.com/v1/messages");
+        let output = cmd.output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+}
+
+impl Model for AnthropicModel {
+    fn infer(&self, prompt: &str) -> Action {
+        let system = "You are MOTE. Use the available capabilities to gather information, then complete.\n\
+                      CRITICAL RULES:\n\
+                      1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.\n\
+                      2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.\n\
+                      3. Valid formats:\n\
+                         shell: <command>\n\
+                         read_file: <path>\n\
+                         write_file: <path> | <content>\n\
+                         list_dir: <path>\n\
+                         git: <args>\n\
+                         complete: <summary>\n\
+                      Examples:\n\
+                      User: Show current date\n\
+                      shell: date\n\
+                      User: List files in current directory\n\
+                      list_dir: .\n\
+                      User: Read the README file\n\
+                      read_file: README.md\n\
+                      User: Create a file hello.py that prints hi\n\
+                      write_file: hello.py | print(\"hi\")\n\
+                      User: Show last 3 git commits\n\
+                      git: log -3\n\
+                      After observing results, you may use complete: <summary> to finish.";
+        let body = format!(
+            r#"{{"model":"{}","max_tokens":200,"system":"{}","messages":[{{"role":"user","content":"{}"}}]}}"#,
+            self.model,
+            system.replace('"', "\\\"").replace('\n', " "),
+            prompt.replace('"', "\\\"").replace('\n', " ")
+        );
+        match self.post(&body) {
+            Ok(text) => {
+                let content = serde_json::from_str::<serde_json::Value>(&text)
+                    .ok()
+                    .and_then(|v| v.pointer("/content/0/text").cloned())
                     .and_then(|v| v.as_str().map(String::from))
                     .unwrap_or_default();
                 parse_action(&content)
@@ -347,6 +420,29 @@ impl<'a> Runtime<'a> {
         }
     }
 
+    fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, ctx_prefix: &str, capability_used: &mut bool) -> bool {
+        let cap = self.capabilities.iter().find(|c| c.name() == name);
+        match cap {
+            Some(cap) => match cap.invoke(input) {
+                Ok(obs) => {
+                    *capability_used = true;
+                    self.events.push(Event::ActionExecuted(action_desc.into()));
+                    self.events.push(Event::ObservationReceived(obs.clone()));
+                    return true;
+                }
+                Err(e) => {
+                    self.state = State::Failed;
+                    self.events.push(Event::ObservationReceived(format!("error: {}", e)));
+                    return false;
+                }
+            },
+            None => {
+                self.events.push(Event::ObservationReceived(format!("error: {} capability not available", name)));
+                return true; // not a fatal error, just unavailable
+            }
+        }
+    }
+
     fn run(&mut self, task: &str) -> State {
         let mut context = task.to_string();
         let mut last_action: Option<Action> = None;
@@ -371,110 +467,61 @@ impl<'a> Runtime<'a> {
             last_action = Some(action.clone());
             match action {
                 Action::Shell { command } => {
-                    let cap = self.capabilities.iter().find(|c| c.name() == "shell");
-                    match cap {
-                        Some(cap) => match cap.invoke(&command) {
-                            Ok(obs) => {
-                                capability_used = true;
-                                self.events.push(Event::ActionExecuted(command));
-                                self.events.push(Event::ObservationReceived(obs.clone()));
-                                context = format!("{}\nObservation: {}", context, obs);
-                            }
-                            Err(e) => {
-                                self.state = State::Failed;
-                                self.events.push(Event::ObservationReceived(format!("error: {}", e)));
-                                break;
-                            }
-                        },
-                        None => {
-                            self.events.push(Event::ObservationReceived("error: shell capability not available".into()));
-                        }
+                    let desc = format!("shell {}", command);
+                    if self.invoke_cap("shell", &command, &desc, "", &mut capability_used) {
+                        // observation already pushed; update context
+                        let obs = self.events.last().map(|e| match e {
+                            Event::ObservationReceived(s) => s.clone(),
+                            _ => String::new(),
+                        }).unwrap_or_default();
+                        context = format!("{}\nObservation: {}", context, obs);
+                    } else {
+                        break;
                     }
                 }
                 Action::ReadFile { path } => {
-                    let cap = self.capabilities.iter().find(|c| c.name() == "read_file");
-                    match cap {
-                        Some(cap) => match cap.invoke(&path) {
-                            Ok(content) => {
-                                capability_used = true;
-                                self.events.push(Event::ActionExecuted(format!("read_file {}", path)));
-                                self.events.push(Event::ObservationReceived(content.clone()));
-                                context = format!("{}\nFile {}:\n{}", context, path, content);
-                            }
-                            Err(e) => {
-                                self.state = State::Failed;
-                                self.events.push(Event::ObservationReceived(format!("error: {}", e)));
-                                break;
-                            }
-                        },
-                        None => {
-                            self.events.push(Event::ObservationReceived("error: read_file capability not available".into()));
-                        }
+                    let desc = format!("read_file {}", path);
+                    if self.invoke_cap("read_file", &path, &desc, &format!("File {}:", path), &mut capability_used) {
+                        let obs = self.events.last().map(|e| match e {
+                            Event::ObservationReceived(s) => s.clone(),
+                            _ => String::new(),
+                        }).unwrap_or_default();
+                        context = format!("{}\nFile {}:\n{}", context, path, obs);
+                    } else {
+                        break;
                     }
                 }
                 Action::WriteFile { path, content } => {
-                    let cap = self.capabilities.iter().find(|c| c.name() == "write_file");
-                    match cap {
-                        Some(cap) => {
-                            let input = format!("{}|{}", path, content);
-                            match cap.invoke(&input) {
-                                Ok(obs) => {
-                                    capability_used = true;
-                                    self.events.push(Event::ActionExecuted(format!("write_file {}", path)));
-                                    self.events.push(Event::ObservationReceived(obs));
-                                }
-                                Err(e) => {
-                                    self.state = State::Failed;
-                                    self.events.push(Event::ObservationReceived(format!("error: {}", e)));
-                                    break;
-                                }
-                            }
-                        },
-                        None => {
-                            self.events.push(Event::ObservationReceived("error: write_file capability not available".into()));
-                        }
+                    let desc = format!("write_file {}", path);
+                    let input = format!("{}|{}", path, content);
+                    if self.invoke_cap("write_file", &input, &desc, "", &mut capability_used) {
+                        // observation already pushed
+                    } else {
+                        break;
                     }
                 }
                 Action::ListDir { path } => {
-                    let cap = self.capabilities.iter().find(|c| c.name() == "list_dir");
-                    match cap {
-                        Some(cap) => match cap.invoke(&path) {
-                            Ok(entries) => {
-                                capability_used = true;
-                                self.events.push(Event::ActionExecuted(format!("list_dir {}", path)));
-                                self.events.push(Event::ObservationReceived(entries.clone()));
-                                context = format!("{}\nDir {}:\n{}", context, path, entries);
-                            }
-                            Err(e) => {
-                                self.state = State::Failed;
-                                self.events.push(Event::ObservationReceived(format!("error: {}", e)));
-                                break;
-                            }
-                        },
-                        None => {
-                            self.events.push(Event::ObservationReceived("error: list_dir capability not available".into()));
-                        }
+                    let desc = format!("list_dir {}", path);
+                    if self.invoke_cap("list_dir", &path, &desc, &format!("Dir {}:", path), &mut capability_used) {
+                        let obs = self.events.last().map(|e| match e {
+                            Event::ObservationReceived(s) => s.clone(),
+                            _ => String::new(),
+                        }).unwrap_or_default();
+                        context = format!("{}\nDir {}:\n{}", context, path, obs);
+                    } else {
+                        break;
                     }
                 }
                 Action::Git { args } => {
-                    let cap = self.capabilities.iter().find(|c| c.name() == "git");
-                    match cap {
-                        Some(cap) => match cap.invoke(&args) {
-                            Ok(output) => {
-                                capability_used = true;
-                                self.events.push(Event::ActionExecuted(format!("git {}", args)));
-                                self.events.push(Event::ObservationReceived(output.clone()));
-                                context = format!("{}\nGit output: {}", context, output);
-                            }
-                            Err(e) => {
-                                self.state = State::Failed;
-                                self.events.push(Event::ObservationReceived(format!("error: {}", e)));
-                                break;
-                            }
-                        },
-                        None => {
-                            self.events.push(Event::ObservationReceived("error: git capability not available".into()));
-                        }
+                    let desc = format!("git {}", args);
+                    if self.invoke_cap("git", &args, &desc, "Git output:", &mut capability_used) {
+                        let obs = self.events.last().map(|e| match e {
+                            Event::ObservationReceived(s) => s.clone(),
+                            _ => String::new(),
+                        }).unwrap_or_default();
+                        context = format!("{}\nGit output: {}", context, obs);
+                    } else {
+                        break;
                     }
                 }
                 Action::Complete { summary } => {
@@ -504,13 +551,14 @@ fn main() {
     let yaml = fs::read_to_string(spec_path)
         .unwrap_or_else(|_| "name: demo\ncapabilities: [shell]\nmax_iterations: 10".into());
     let manifest: Manifest = serde_yaml::from_str(&yaml).expect("invalid manifest");
-    println!("MOTE v0.4 — {}", manifest.name);
+    println!("MOTE v0.7 — {}", manifest.name);
     println!("Task: {}", task);
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
     println!("---");
     let model: Box<dyn Model> = match manifest.provider.as_str() {
         "google" => Box::new(GoogleModel::new(&manifest.model, &manifest.auth)),
+        "anthropic" => Box::new(AnthropicModel::new(&manifest.model, &manifest.auth)),
         _ => Box::new(CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth)),
     };
     let mut rt = Runtime::new(&*model, &manifest);
@@ -533,7 +581,17 @@ mod tests {
     }
     #[test]
     fn test_runtime_completes() {
-        let m = MockModel;
+        struct TwoStepModel;
+        impl Model for TwoStepModel {
+            fn infer(&self, prompt: &str) -> Action {
+                if prompt.contains("Observation") {
+                    Action::Complete { summary: "mock done".into() }
+                } else {
+                    Action::Shell { command: "echo step1".into() }
+                }
+            }
+        }
+        let m = TwoStepModel;
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
@@ -542,7 +600,7 @@ mod tests {
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("test task");
         assert_eq!(state, State::Completed);
-        assert_eq!(rt.budget.iterations, 1);
+        assert_eq!(rt.budget.iterations, 2);
     }
     #[test]
     fn test_budget_exhaustion() {
