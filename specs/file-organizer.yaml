@@ -1,6 +1,7 @@
 name: file-organizer
 capabilities: [shell, read_file, write_file, list_dir]
 max_iterations: 15
-model: "groq/compound-mini"
-endpoint: "https://api.groq.com/openai/v1/chat/completions"
-auth: "Bearer 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"
+model: "gemini-3.5-flash"
+endpoint: ""
+auth: "AQ.Ab8RN6IVKB0Li4DKTANH4nensvg_OYL_VqrFrTpSRxIg18le7g"
+provider: "google"
