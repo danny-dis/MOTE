@@ -70,16 +70,29 @@ impl CurlModel {
 
 impl Model for CurlModel {
     fn infer(&self, prompt: &str) -> Action {
-        let system = "You are MOTE. You MUST use the available capabilities to gather information before completing.\n\
-                      NEVER use 'complete:' on the first turn. ALWAYS use at least one capability first.\n\
-                      Respond with EXACTLY ONE line in one of these formats:\n\
-                      shell: <command>\n\
-                      read_file: <path>\n\
-                      write_file: <path> | <content>\n\
-                      list_dir: <path>\n\
-                      git: <args>\n\
-                      complete: <summary>\n\
-                      Nothing else. No explanations.";
+        let system = "You are MOTE. Use the available capabilities to gather information, then complete.\n\
+                      CRITICAL RULES:\n\
+                      1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.\n\
+                      2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.\n\
+                      3. Valid formats:\n\
+                         shell: <command>\n\
+                         read_file: <path>\n\
+                         write_file: <path> | <content>\n\
+                         list_dir: <path>\n\
+                         git: <args>\n\
+                         complete: <summary>\n\
+                      Examples:\n\
+                      User: Show current date\n\
+                      shell: date\n\
+                      User: List files in current directory\n\
+                      list_dir: .\n\
+                      User: Read the README file\n\
+                      read_file: README.md\n\
+                      User: Create a file hello.py that prints hi\n\
+                      write_file: hello.py | print(\"hi\")\n\
+                      User: Show last 3 git commits\n\
+                      git: log -3\n\
+                      After observing results, you may use complete: <summary> to finish.";
         let body = format!(
             r#"{{"model":"{}","messages":[{{"role":"system","content":"{}"}},{{"role":"user","content":"{}"}}],"max_tokens":200}}"#,
             self.model,
@@ -133,18 +146,31 @@ impl GoogleModel {
 
 impl Model for GoogleModel {
     fn infer(&self, prompt: &str) -> Action {
-        let system = "You are MOTE. You MUST use the available capabilities to gather information before completing.\n\
-                      NEVER use 'complete:' on the first turn. ALWAYS use at least one capability first.\n\
-                      Respond with EXACTLY ONE line in one of these formats:\n\
-                      shell: <command>\n\
-                      read_file: <path>\n\
-                      write_file: <path> | <content>\n\
-                      list_dir: <path>\n\
-                      git: <args>\n\
-                      complete: <summary>\n\
-                      Nothing else. No explanations.";
+        let system = "You are MOTE. Use the available capabilities to gather information, then complete.\n\
+                      CRITICAL RULES:\n\
+                      1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.\n\
+                      2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.\n\
+                      3. Valid formats:\n\
+                         shell: <command>\n\
+                         read_file: <path>\n\
+                         write_file: <path> | <content>\n\
+                         list_dir: <path>\n\
+                         git: <args>\n\
+                         complete: <summary>\n\
+                      Examples:\n\
+                      User: Show current date\n\
+                      shell: date\n\
+                      User: List files in current directory\n\
+                      list_dir: .\n\
+                      User: Read the README file\n\
+                      read_file: README.md\n\
+                      User: Create a file hello.py that prints hi\n\
+                      write_file: hello.py | print(\"hi\")\n\
+                      User: Show last 3 git commits\n\
+                      git: log -3\n\
+                      After observing results, you may use complete: <summary> to finish.";
         let body = format!(
-            r#"{{"contents":[{{"parts":[{{"text":"{}"}}]}},{{"parts":[{{"text":"{}"}}]}}]}}"#,
+            r#"{{"contents":[{{"parts":[{{"text":"{}]}}]}},{{"parts":[{{"text":"{}]}}]}}]}}"#,
             system.replace('"', "\\\"").replace('\n', " "),
             prompt.replace('"', "\\\"").replace('\n', " ")
         );
@@ -325,6 +351,7 @@ impl<'a> Runtime<'a> {
         let mut context = task.to_string();
         let mut last_action: Option<Action> = None;
         let mut repeat_count = 0;
+        let mut capability_used = false;
         while self.state == State::Running && !self.budget.exhausted() {
             self.budget.tick();
             let action = self.model.infer(&context);
@@ -348,6 +375,7 @@ impl<'a> Runtime<'a> {
                     match cap {
                         Some(cap) => match cap.invoke(&command) {
                             Ok(obs) => {
+                                capability_used = true;
                                 self.events.push(Event::ActionExecuted(command));
                                 self.events.push(Event::ObservationReceived(obs.clone()));
                                 context = format!("{}\nObservation: {}", context, obs);
@@ -368,6 +396,7 @@ impl<'a> Runtime<'a> {
                     match cap {
                         Some(cap) => match cap.invoke(&path) {
                             Ok(content) => {
+                                capability_used = true;
                                 self.events.push(Event::ActionExecuted(format!("read_file {}", path)));
                                 self.events.push(Event::ObservationReceived(content.clone()));
                                 context = format!("{}\nFile {}:\n{}", context, path, content);
@@ -390,6 +419,7 @@ impl<'a> Runtime<'a> {
                             let input = format!("{}|{}", path, content);
                             match cap.invoke(&input) {
                                 Ok(obs) => {
+                                    capability_used = true;
                                     self.events.push(Event::ActionExecuted(format!("write_file {}", path)));
                                     self.events.push(Event::ObservationReceived(obs));
                                 }
@@ -410,6 +440,7 @@ impl<'a> Runtime<'a> {
                     match cap {
                         Some(cap) => match cap.invoke(&path) {
                             Ok(entries) => {
+                                capability_used = true;
                                 self.events.push(Event::ActionExecuted(format!("list_dir {}", path)));
                                 self.events.push(Event::ObservationReceived(entries.clone()));
                                 context = format!("{}\nDir {}:\n{}", context, path, entries);
@@ -430,6 +461,7 @@ impl<'a> Runtime<'a> {
                     match cap {
                         Some(cap) => match cap.invoke(&args) {
                             Ok(output) => {
+                                capability_used = true;
                                 self.events.push(Event::ActionExecuted(format!("git {}", args)));
                                 self.events.push(Event::ObservationReceived(output.clone()));
                                 context = format!("{}\nGit output: {}", context, output);
@@ -446,6 +478,11 @@ impl<'a> Runtime<'a> {
                     }
                 }
                 Action::Complete { summary } => {
+                    // Must use at least one capability before completing
+                    if !capability_used {
+                        self.events.push(Event::ObservationReceived("error: use at least one capability before completing".into()));
+                        continue;
+                    }
                     self.events.push(Event::ObservationReceived(summary));
                     self.state = State::Completed;
                     self.events.push(Event::RunCompleted);
