@@ -1,0 +1,6 @@
+name: code-generator
+capabilities: [write_file, shell]
+max_iterations: 15
+model: "groq/compound-mini"
+endpoint: "https://api.groq.com/openai/v1/chat/completions"
+auth: "***REMOVED***"

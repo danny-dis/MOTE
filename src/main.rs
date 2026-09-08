@@ -1,6 +1,5 @@
 use std::fs;
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::process::Command;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -14,13 +13,16 @@ struct Manifest {
     model: String,
     #[serde(default = "default_endpoint")]
     endpoint: String,
+    #[serde(default = "default_auth")]
+    auth: String,
 }
 
 fn default_max_iters() -> usize { 20 }
-fn default_model() -> String { "~deepseek/deepseek-v4-flash-latest".into() }
-fn default_endpoint() -> String { "http://127.0.0.1:47113/v1/chat/completions".into() }
+fn default_model() -> String { "groq/compound-mini".into() }
+fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
+fn default_auth() -> String { String::new() }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 enum Action {
     Shell { command: String },
     ReadFile { path: String },
@@ -34,51 +36,39 @@ trait Model {
     fn infer(&self, prompt: &str) -> Action;
 }
 
-// ── Raw TCP HTTP client for DMR-X ────────────────────────────────────
-struct DmrxModel {
-    host: String,
-    port: u16,
-    path: String,
+struct CurlModel {
+    endpoint: String,
     model: String,
     auth: String,
 }
 
-impl DmrxModel {
+impl CurlModel {
     fn new(endpoint: &str, model: &str, auth: &str) -> Self {
-        let without_scheme = endpoint.strip_prefix("http://").unwrap_or(endpoint);
-        let (host_port, path) = without_scheme.split_once('/').unwrap_or((without_scheme, ""));
-        let (host, port) = host_port.split_once(':').unwrap_or((host_port, "80"));
-        Self {
-            host: host.into(),
-            port: port.parse().unwrap_or(80),
-            path: format!("/{}", path),
-            model: model.into(),
-            auth: auth.into(),
-        }
+        Self { endpoint: endpoint.into(), model: model.into(), auth: auth.into() }
     }
 
     fn post(&self, body: &str) -> Result<String, String> {
-        let addr = format!("{}:{}", self.host, self.port);
-        let mut stream = TcpStream::connect(&addr).map_err(|e| e.to_string())?;
-        let req = format!(
-            "POST {} HTTP/1.1\r\nHost: {}\r\nAuthorization: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-            self.path, self.host, self.auth, body.len(), body
-        );
-        stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
-        stream.flush().map_err(|e| e.to_string())?;
-        let mut resp = String::new();
-        stream.read_to_string(&mut resp).map_err(|e| e.to_string())?;
-        if let Some(idx) = resp.find("\r\n\r\n") {
-            Ok(resp[idx + 4..].to_string())
+        let mut cmd = Command::new("curl");
+        cmd.arg("-s")
+            .arg("-X").arg("POST")
+            .arg("-H").arg("Content-Type: application/json")
+            .arg("-H").arg(format!("Authorization: {}", self.auth))
+            .arg("-d").arg(body)
+            .arg(&self.endpoint);
+        let output = cmd.output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).to_string())
         } else {
-            Ok(resp)
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
         }
     }
 }
 
-impl Model for DmrxModel {
+impl Model for CurlModel {
     fn infer(&self, prompt: &str) -> Action {
-        let system = "You are MOTE. Respond with EXACTLY ONE line in one of these formats:\n\
+        let system = "You are MOTE. You MUST use the available capabilities to gather information before completing.\n\
+                      NEVER use 'complete:' on the first turn. ALWAYS use at least one capability first.\n\
+                      Respond with EXACTLY ONE line in one of these formats:\n\
                       shell: <command>\n\
                       read_file: <path>\n\
                       write_file: <path> | <content>\n\
@@ -126,7 +116,6 @@ impl Model for DmrxModel {
     }
 }
 
-// ── EchoModel stub (for tests) ───────────────────────────────────────
 struct EchoModel;
 impl Model for EchoModel {
     fn infer(&self, prompt: &str) -> Action {
@@ -264,11 +253,25 @@ impl<'a> Runtime<'a> {
 
     fn run(&mut self, task: &str) -> State {
         let mut context = task.to_string();
+        let mut last_action: Option<Action> = None;
+        let mut repeat_count = 0;
         while self.state == State::Running && !self.budget.exhausted() {
             self.budget.tick();
             let action = self.model.infer(&context);
             let action_desc = format!("{:?}", action);
-            self.events.push(Event::ActionProposed(action_desc));
+            self.events.push(Event::ActionProposed(action_desc.clone()));
+            // Repetition detection
+            if last_action.as_ref() == Some(&action) {
+                repeat_count += 1;
+                if repeat_count >= 3 {
+                    self.events.push(Event::ObservationReceived("error: action repeated 3 times, stopping".into()));
+                    self.state = State::Failed;
+                    break;
+                }
+            } else {
+                repeat_count = 0;
+            }
+            last_action = Some(action.clone());
             match action {
                 Action::Shell { command } => {
                     let cap = self.capabilities.iter().find(|c| c.name() == "shell");
@@ -394,12 +397,12 @@ fn main() {
     let yaml = fs::read_to_string(spec_path)
         .unwrap_or_else(|_| "name: demo\ncapabilities: [shell]\nmax_iterations: 10".into());
     let manifest: Manifest = serde_yaml::from_str(&yaml).expect("invalid manifest");
-    println!("MOTE v0.3 — {}", manifest.name);
+    println!("MOTE v0.4 — {}", manifest.name);
     println!("Task: {}", task);
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
     println!("---");
-    let model = DmrxModel::new(&manifest.endpoint, &manifest.model, "Bearer g");
+    let model = CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth);
     let mut rt = Runtime::new(&model, &manifest);
     let final_state = rt.run(task);
     println!("---");
@@ -423,7 +426,7 @@ mod tests {
         let m = MockModel;
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
-            model: "test".into(), endpoint: "http://localhost".into(),
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("test task");
@@ -441,7 +444,7 @@ mod tests {
         let m = LoopForever;
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
-            model: "test".into(), endpoint: "http://localhost".into(),
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("loop");
@@ -457,8 +460,27 @@ mod tests {
             max_iterations: 5,
             model: "test".into(),
             endpoint: "http://localhost".into(),
+            auth: String::new(),
         };
         let rt = Runtime::new(&m, &manifest);
         assert_eq!(rt.capabilities.len(), 3);
+    }
+    #[test]
+    fn test_repetition_detection() {
+        struct RepeatModel;
+        impl Model for RepeatModel {
+            fn infer(&self, _: &str) -> Action {
+                Action::Shell { command: "echo same".into() }
+            }
+        }
+        let m = RepeatModel;
+        let manifest = Manifest {
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+        };
+        let mut rt = Runtime::new(&m, &manifest);
+        let state = rt.run("repeat");
+        assert_eq!(state, State::Failed);
+        assert_eq!(rt.budget.iterations, 4); // 3rd repeat = 4th iteration
     }
 }

@@ -1,5 +1,6 @@
 name: demo
 capabilities: [shell, read_file, write_file, list_dir, git]
 max_iterations: 10
-model: "~deepseek/deepseek-v4-flash-latest"
-endpoint: "http://127.0.0.1:47113/v1/chat/completions"
+model: "llama-3.3-70b-versatile"
+endpoint: "https://api.groq.com/openai/v1/chat/completions"
+auth: "***REMOVED***"
