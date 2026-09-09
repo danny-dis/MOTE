@@ -17,9 +17,14 @@ struct Manifest {
     auth: String,
     #[serde(default = "default_provider")]
     provider: String,
+    #[serde(default = "default_shell_backend")]
+    shell_backend: String,
+    #[serde(default)]
+    output_file: Option<String>,
 }
 
 fn default_provider() -> String { "openai".into() }
+fn default_shell_backend() -> String { "auto".into() }
 fn default_max_iters() -> usize { 20 }
 fn default_model() -> String { "groq/compound-mini".into() }
 fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
@@ -59,6 +64,7 @@ enum Action {
     ListDir { path: String },
     Git { args: String },
     Complete { summary: String },
+    Retry,
 }
 
 trait Model {
@@ -222,26 +228,34 @@ impl Model for AnthropicModel {
 }
 
 fn parse_action(content: &str) -> Action {
-    let lower = content.to_lowercase();
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return Action::Retry;
+    }
+    let lower = trimmed.to_lowercase();
     if lower.starts_with("complete:") {
-        Action::Complete { summary: content[9..].trim().into() }
+        let summary = trimmed[9..].trim();
+        if summary.is_empty() {
+            return Action::Retry;
+        }
+        Action::Complete { summary: summary.into() }
     } else if lower.starts_with("shell:") {
-        Action::Shell { command: content[6..].trim().into() }
+        Action::Shell { command: trimmed[6..].trim().into() }
     } else if lower.starts_with("read_file:") {
-        Action::ReadFile { path: content[10..].trim().into() }
+        Action::ReadFile { path: trimmed[10..].trim().into() }
     } else if lower.starts_with("write_file:") {
-        let rest = &content[11..];
+        let rest = &trimmed[11..];
         if let Some((path, content_text)) = rest.split_once('|') {
             Action::WriteFile { path: path.trim().into(), content: content_text.trim().into() }
         } else {
             Action::Complete { summary: "write_file format: path | content".into() }
         }
     } else if lower.starts_with("list_dir:") {
-        Action::ListDir { path: content[9..].trim().into() }
+        Action::ListDir { path: trimmed[9..].trim().into() }
     } else if lower.starts_with("git:") {
-        Action::Git { args: content[4..].trim().into() }
+        Action::Git { args: trimmed[4..].trim().into() }
     } else {
-        Action::Complete { summary: content.into() }
+        Action::Complete { summary: trimmed.into() }
     }
 }
 
@@ -261,12 +275,53 @@ trait Capability: Send {
     fn invoke(&self, input: &str) -> Result<String, String>;
 }
 
-struct ShellCap;
+struct ShellCap {
+    backend: String,
+}
+
+impl ShellCap {
+    fn new(backend: &str) -> Self {
+        let backend = match backend {
+            "auto" => {
+                if cfg!(windows) {
+                    "cmd".into()
+                } else {
+                    "sh".into()
+                }
+            }
+            other => other.into(),
+        };
+        Self { backend }
+    }
+}
+
 impl Capability for ShellCap {
     fn name(&self) -> &str { "shell" }
     fn invoke(&self, cmd: &str) -> Result<String, String> {
-        let output = std::process::Command::new("sh").arg("-c").arg(cmd)
-            .output().map_err(|e| e.to_string())?;
+        let mut command = match self.backend.as_str() {
+            "cmd" => {
+                let mut c = std::process::Command::new("cmd");
+                c.arg("/c");
+                c
+            }
+            "powershell" => {
+                let mut c = std::process::Command::new("powershell");
+                c.arg("-Command");
+                c
+            }
+            "sh" => {
+                let mut c = std::process::Command::new("sh");
+                c.arg("-c");
+                c
+            }
+            _ => {
+                let mut c = std::process::Command::new("sh");
+                c.arg("-c");
+                c
+            }
+        };
+        command.arg(cmd);
+        let output = command.output().map_err(|e| e.to_string())?;
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 }
@@ -353,6 +408,7 @@ struct Runtime<'a> {
     budget: Budgets,
     state: State,
     events: Vec<Event>,
+    output_file: Option<String>,
 }
 
 impl<'a> Runtime<'a> {
@@ -360,7 +416,7 @@ impl<'a> Runtime<'a> {
         let mut capabilities: Vec<Box<dyn Capability>> = Vec::new();
         for cap_name in &manifest.capabilities {
             match cap_name.as_str() {
-                "shell" => capabilities.push(Box::new(ShellCap)),
+                "shell" => capabilities.push(Box::new(ShellCap::new(&manifest.shell_backend))),
                 "read_file" => capabilities.push(Box::new(ReadFileCap)),
                 "write_file" => capabilities.push(Box::new(WriteFileCap)),
                 "list_dir" => capabilities.push(Box::new(ListDirCap)),
@@ -369,7 +425,7 @@ impl<'a> Runtime<'a> {
             }
         }
         if capabilities.is_empty() {
-            capabilities.push(Box::new(ShellCap));
+            capabilities.push(Box::new(ShellCap::new(&manifest.shell_backend)));
         }
         Self {
             model,
@@ -377,6 +433,7 @@ impl<'a> Runtime<'a> {
             budget: Budgets::new(manifest.max_iterations),
             state: State::Running,
             events: vec![Event::RunStarted],
+            output_file: manifest.output_file.clone(),
         }
     }
 
@@ -490,10 +547,22 @@ impl<'a> Runtime<'a> {
                         self.events.push(Event::ObservationReceived("error: use at least one capability before completing".into()));
                         continue;
                     }
-                    self.events.push(Event::ObservationReceived(summary));
+                    self.events.push(Event::ObservationReceived(summary.clone()));
+                    // Post-process: write summary to output_file if set
+                    if let Some(path) = &self.output_file {
+                        if let Err(e) = fs::write(path, &summary) {
+                            self.events.push(Event::ObservationReceived(format!("error writing output_file: {}", e)));
+                        } else {
+                            self.events.push(Event::ObservationReceived(format!("wrote output_file: {}", path)));
+                        }
+                    }
                     self.state = State::Completed;
                     self.events.push(Event::RunCompleted);
                     break;
+                }
+                Action::Retry => {
+                    self.events.push(Event::ObservationReceived("error: empty response from model, retrying".into()));
+                    continue;
                 }
             }
         }
@@ -555,7 +624,7 @@ mod tests {
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("test task");
@@ -574,7 +643,7 @@ mod tests {
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("loop");
@@ -591,7 +660,7 @@ mod tests {
             model: "test".into(),
             endpoint: "http://localhost".into(),
             auth: String::new(),
-            provider: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
         let rt = Runtime::new(&m, &manifest);
         assert_eq!(rt.capabilities.len(), 3);
@@ -608,11 +677,60 @@ mod tests {
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
         let mut rt = Runtime::new(&m, &manifest);
         let state = rt.run("repeat");
         assert_eq!(state, State::Failed);
         assert_eq!(rt.budget.iterations, 4); // 3rd repeat = 4th iteration
+    }
+    #[test]
+    fn test_empty_content_retries() {
+        struct EmptyModel;
+        impl Model for EmptyModel {
+            fn infer(&self, prompt: &str) -> Action {
+                if prompt.contains("Observation") {
+                    Action::Complete { summary: "done".into() }
+                } else {
+                    Action::Shell { command: "echo step".into() }
+                }
+            }
+        }
+        let m = EmptyModel;
+        let manifest = Manifest {
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
+        };
+        let mut rt = Runtime::new(&m, &manifest);
+        let state = rt.run("test empty");
+        assert_eq!(state, State::Completed);
+        assert_eq!(rt.budget.iterations, 2);
+    }
+    #[test]
+    fn test_output_file_written() {
+        struct WriteModel;
+        impl Model for WriteModel {
+            fn infer(&self, prompt: &str) -> Action {
+                if prompt.contains("Observation") {
+                    Action::Complete { summary: "report content here".into() }
+                } else {
+                    Action::Shell { command: "echo hi".into() }
+                }
+            }
+        }
+        let m = WriteModel;
+        let out_path = "test_output_file.txt".to_string();
+        let manifest = Manifest {
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: Some(out_path.clone()),
+        };
+        let mut rt = Runtime::new(&m, &manifest);
+        let state = rt.run("test output");
+        assert_eq!(state, State::Completed);
+        let written = fs::read_to_string(&out_path).expect("output file not written");
+        assert_eq!(written, "report content here");
+        fs::remove_file(&out_path).ok();
     }
 }
