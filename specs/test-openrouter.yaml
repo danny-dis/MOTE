@@ -1,0 +1,9 @@
+name: test-openrouter
+capabilities: [shell, read_file, write_file]
+max_iterations: 6
+model: "meta-llama/llama-3.3-70b-instruct:free"
+endpoint: "https://openrouter.ai/api/v1/chat/completions"
+auth: "sk-or-v1-6f2b456789abcdef0123456789abcdef0123456789abcdef"
+provider: "openai"
+shell_backend: "auto"
+output_file: "C:/Users/pc/agents/MOTE/reports/test-openrouter.md"
