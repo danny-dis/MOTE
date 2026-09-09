@@ -580,7 +580,7 @@ fn main() {
     let yaml = fs::read_to_string(spec_path)
         .unwrap_or_else(|_| "name: demo\ncapabilities: [shell]\nmax_iterations: 10".into());
     let manifest: Manifest = serde_yaml::from_str(&yaml).expect("invalid manifest");
-    println!("MOTE v0.7 — {}", manifest.name);
+    println!("MOTE v0.9 — {}", manifest.name);
     println!("Task: {}", task);
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
