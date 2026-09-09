@@ -318,31 +318,33 @@ impl ShellCap {
 impl Capability for ShellCap {
     fn name(&self) -> &str { "shell" }
     fn invoke(&self, cmd: &str) -> Result<String, String> {
-        let mut command = match self.backend.as_str() {
-            "cmd" => {
-                let mut c = std::process::Command::new("cmd");
-                c.arg("/c");
-                c
-            }
-            "powershell" => {
-                let mut c = std::process::Command::new("powershell");
-                c.arg("-Command");
-                c
-            }
-            "sh" => {
-                let mut c = std::process::Command::new("sh");
-                c.arg("-c");
-                c
-            }
-            _ => {
-                let mut c = std::process::Command::new("sh");
-                c.arg("-c");
-                c
+        // On Windows, detect powershell commands and route directly
+        let (program, arg) = if self.backend == "cmd" && cmd.trim().starts_with("powershell") {
+            ("powershell", "-Command")
+        } else {
+            match self.backend.as_str() {
+                "cmd" => ("cmd", "/c"),
+                "powershell" => ("powershell", "-Command"),
+                "sh" => ("sh", "-c"),
+                _ => ("sh", "-c"),
             }
         };
+        let mut command = std::process::Command::new(program);
+        command.arg(arg);
         command.arg(cmd);
         let output = command.output().map_err(|e| e.to_string())?;
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let combined = if stdout.trim().is_empty() && !stderr.trim().is_empty() {
+            format!("STDERR: {}", stderr.trim())
+        } else {
+            stdout.trim().to_string()
+        };
+        if output.status.success() || !combined.is_empty() {
+            Ok(combined)
+        } else {
+            Err(combined)
+        }
     }
 }
 
@@ -429,6 +431,8 @@ struct Runtime<'a> {
     state: State,
     events: Vec<Event>,
     output_file: Option<String>,
+    current_model_idx: usize,
+    output_written: bool,
 }
 
 impl<'a> Runtime<'a> {
@@ -454,21 +458,41 @@ impl<'a> Runtime<'a> {
             state: State::Running,
             events: vec![Event::RunStarted],
             output_file: manifest.output_file.clone(),
+            current_model_idx: 0,
+            output_written: false,
         }
     }
 
     fn try_chain(&mut self, context: &str) -> Action {
-        for model in &self.models {
-            let action = model.infer(context);
+        let start = self.current_model_idx;
+        let mut empty_retries = 0;
+        loop {
+            let action = self.models[self.current_model_idx].infer(context);
             match &action {
                 Action::Complete { summary } if summary.starts_with("model error") || summary.starts_with("gemini error") => {
                     self.events.push(Event::ObservationReceived(format!("fallback: {}", summary)));
+                    self.current_model_idx = (self.current_model_idx + 1) % self.models.len();
+                    empty_retries = 0;
+                    if self.current_model_idx == start {
+                        return Action::Complete { summary: "all models exhausted".into() };
+                    }
+                    continue;
+                }
+                Action::Retry => {
+                    empty_retries += 1;
+                    if empty_retries >= 2 {
+                        self.events.push(Event::ObservationReceived(format!("fallback: model {} returned empty {} times", self.current_model_idx, empty_retries)));
+                        self.current_model_idx = (self.current_model_idx + 1) % self.models.len();
+                        empty_retries = 0;
+                        if self.current_model_idx == start {
+                            return Action::Complete { summary: "all models exhausted".into() };
+                        }
+                    }
                     continue;
                 }
                 _ => return action,
             }
         }
-        Action::Complete { summary: "all models exhausted".into() }
     }
 
     fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, _ctx_prefix: &str, capability_used: &mut bool) -> bool {
@@ -546,7 +570,12 @@ impl<'a> Runtime<'a> {
                     let desc = format!("write_file {}", path);
                     let input = format!("{}|{}", path, content);
                     if self.invoke_cap("write_file", &input, &desc, "", &mut capability_used) {
-                        // observation already pushed
+                        // If this write matches output_file, mark for early completion
+                        if let Some(out) = &self.output_file {
+                            if path.trim() == out.trim() {
+                                self.output_written = true;
+                            }
+                        }
                     } else {
                         break;
                     }
@@ -598,6 +627,12 @@ impl<'a> Runtime<'a> {
                     self.events.push(Event::ObservationReceived("error: empty response from model, retrying".into()));
                     continue;
                 }
+            }
+            // Early completion: if output file was written, finish now
+            if self.output_written {
+                self.state = State::Completed;
+                self.events.push(Event::RunCompleted);
+                break;
             }
         }
         if self.budget.exhausted() && self.state == State::Running {

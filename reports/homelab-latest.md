@@ -1,1 +1,1 @@
-# Homelab Report\n\n1. Disk space: 31.31 GB free of 237.89 GB (13.16% free) - ALERT: below 15%\n2. Docker: No containers running\n3. Services: python.exe, node.exe running\n4. Network: Ping 8.8.8.8 success (12ms, exit code 0)\n\nSTATUS: ALERT: Disk space below 15% free
+{"message":"shell: docker ps -a"}
