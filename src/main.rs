@@ -1,5 +1,6 @@
 use std::fs;
 use std::process::Command;
+use std::process::Stdio;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -54,10 +55,17 @@ CRITICAL RULES:
    list_dir: <path>
    git: <args>
    complete: <summary>
-4. YAGNI: pick the SINGLE simplest action that moves toward the goal. Do not chain speculative reads, writes, or commands. One precise action beats a multi-step guess.
+4. YAGNI: pick the SINGLE simplest action that moves toward the goal. Do not chain speculative reads, writes, or commands.
+WINDOWS COMMANDS (when running on Windows):
+- Use 'date /t' not 'date' (date without /t prompts for input and hangs)
+- Use 'dir' or 'dir /b' not 'ls' (ls may not exist)
+- Use 'type' not 'cat'
+- Use 'findstr' not 'grep'
+- Use 'tasklist' not 'ps'
+- Use 'wmic logicaldisk get size,freespace,caption' for disk space
 Examples:
 User: Show current date
-shell: date
+shell: date /t
 User: List files in current directory
 list_dir: .
 User: Read the README file
@@ -114,11 +122,12 @@ impl CurlModel {
 impl Model for CurlModel {
     fn infer(&self, prompt: &str) -> Action {
         let system = MOTE_SYSTEM_PROMPT;
+        let escape = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
         let body = format!(
             r#"{{"model":"{}","messages":[{{"role":"system","content":"{}"}},{{"role":"user","content":"{}"}}],"max_tokens":200}}"#,
             self.model,
-            system.replace('"', "\\\"").replace('\n', " "),
-            prompt.replace('"', "\\\"").replace('\n', " ")
+            escape(system),
+            escape(prompt)
         );
         match self.post(&body) {
             Ok(text) => {
@@ -332,6 +341,7 @@ impl Capability for ShellCap {
         let mut command = std::process::Command::new(program);
         command.arg(arg);
         command.arg(cmd);
+        command.stdin(Stdio::null());
         let output = command.output().map_err(|e| e.to_string())?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -495,12 +505,23 @@ impl<'a> Runtime<'a> {
         }
     }
 
+    fn clean_observation(text: &str) -> String {
+        text.lines()
+            .map(|line| line.trim_end_matches('\r').trim_end())
+            .collect::<Vec<_>>()
+            .join("\n")
+            .trim()
+            .to_string()
+    }
+
+
     fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, _ctx_prefix: &str, capability_used: &mut bool) -> bool {
         let cap = self.capabilities.iter().find(|c| c.name() == name);
         match cap {
             Some(cap) => match cap.invoke(input) {
                 Ok(obs) => {
                     *capability_used = true;
+                    let obs = Self::clean_observation(&obs);
                     self.events.push(Event::ActionExecuted(action_desc.into()));
                     self.events.push(Event::ObservationReceived(obs.clone()));
                     return true;

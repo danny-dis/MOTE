@@ -1,0 +1,9 @@
+name: test-dmrx-claude-haiku
+capabilities: [shell, read_file, write_file]
+max_iterations: 6
+model: "~anthropic/claude-haiku-latest"
+endpoint: "http://localhost:47113/v1/chat/completions"
+auth: ""
+provider: "openai"
+shell_backend: "auto"
+output_file: "C:/Users/pc/agents/MOTE/reports/test-dmrx-claude-haiku.md"

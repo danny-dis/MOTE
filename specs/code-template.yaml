@@ -1,0 +1,9 @@
+name: code-template
+capabilities: [shell, read_file, write_file, git]
+max_iterations: 8
+model: "~openai/gpt-mini-latest"
+endpoint: "http://localhost:47113/v1/chat/completions"
+auth: ""
+provider: "openai"
+shell_backend: "auto"
+output_file: "C:/Users/pc/agents/MOTE/reports/code-template-latest.md"
