@@ -25,6 +25,32 @@ fn default_model() -> String { "groq/compound-mini".into() }
 fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
 fn default_auth() -> String { String::new() }
 
+const MOTE_SYSTEM_PROMPT: &str = "\
+You are MOTE. Use the available capabilities to gather information, then complete.
+CRITICAL RULES:
+1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.
+2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.
+3. Valid formats:
+   shell: <command>
+   read_file: <path>
+   write_file: <path> | <content>
+   list_dir: <path>
+   git: <args>
+   complete: <summary>
+4. YAGNI: pick the SINGLE simplest action that moves toward the goal. Do not chain speculative reads, writes, or commands. One precise action beats a multi-step guess.
+Examples:
+User: Show current date
+shell: date
+User: List files in current directory
+list_dir: .
+User: Read the README file
+read_file: README.md
+User: Create a file hello.py that prints hi
+write_file: hello.py | print(\"hi\")
+User: Show last 3 git commits
+git: log -3
+After observing results, you may use complete: <summary> to finish.";
+
 #[derive(Debug, PartialEq, Clone)]
 enum Action {
     Shell { command: String },
@@ -69,29 +95,7 @@ impl CurlModel {
 
 impl Model for CurlModel {
     fn infer(&self, prompt: &str) -> Action {
-        let system = "You are MOTE. Use the available capabilities to gather information, then complete.\n\
-                      CRITICAL RULES:\n\
-                      1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.\n\
-                      2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.\n\
-                      3. Valid formats:\n\
-                         shell: <command>\n\
-                         read_file: <path>\n\
-                         write_file: <path> | <content>\n\
-                         list_dir: <path>\n\
-                         git: <args>\n\
-                         complete: <summary>\n\
-                      Examples:\n\
-                      User: Show current date\n\
-                      shell: date\n\
-                      User: List files in current directory\n\
-                      list_dir: .\n\
-                      User: Read the README file\n\
-                      read_file: README.md\n\
-                      User: Create a file hello.py that prints hi\n\
-                      write_file: hello.py | print(\"hi\")\n\
-                      User: Show last 3 git commits\n\
-                      git: log -3\n\
-                      After observing results, you may use complete: <summary> to finish.";
+        let system = MOTE_SYSTEM_PROMPT;
         let body = format!(
             r#"{{"model":"{}","messages":[{{"role":"system","content":"{}"}},{{"role":"user","content":"{}"}}],"max_tokens":200}}"#,
             self.model,
@@ -145,29 +149,7 @@ impl GoogleModel {
 
 impl Model for GoogleModel {
     fn infer(&self, prompt: &str) -> Action {
-        let system = "You are MOTE. Use the available capabilities to gather information, then complete.\n\
-                      CRITICAL RULES:\n\
-                      1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.\n\
-                      2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.\n\
-                      3. Valid formats:\n\
-                         shell: <command>\n\
-                         read_file: <path>\n\
-                         write_file: <path> | <content>\n\
-                         list_dir: <path>\n\
-                         git: <args>\n\
-                         complete: <summary>\n\
-                      Examples:\n\
-                      User: Show current date\n\
-                      shell: date\n\
-                      User: List files in current directory\n\
-                      list_dir: .\n\
-                      User: Read the README file\n\
-                      read_file: README.md\n\
-                      User: Create a file hello.py that prints hi\n\
-                      write_file: hello.py | print(\"hi\")\n\
-                      User: Show last 3 git commits\n\
-                      git: log -3\n\
-                      After observing results, you may use complete: <summary> to finish.";
+        let system = MOTE_SYSTEM_PROMPT;
         let body = format!(
             r#"{{"contents":[{{"parts":[{{"text":"{}"}}]}},{{"parts":[{{"text":"{}"}}]}}]}}"#,
             system.replace('"', "\\\"").replace('\n', " "),
@@ -218,29 +200,7 @@ impl AnthropicModel {
 
 impl Model for AnthropicModel {
     fn infer(&self, prompt: &str) -> Action {
-        let system = "You are MOTE. Use the available capabilities to gather information, then complete.\n\
-                      CRITICAL RULES:\n\
-                      1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.\n\
-                      2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.\n\
-                      3. Valid formats:\n\
-                         shell: <command>\n\
-                         read_file: <path>\n\
-                         write_file: <path> | <content>\n\
-                         list_dir: <path>\n\
-                         git: <args>\n\
-                         complete: <summary>\n\
-                      Examples:\n\
-                      User: Show current date\n\
-                      shell: date\n\
-                      User: List files in current directory\n\
-                      list_dir: .\n\
-                      User: Read the README file\n\
-                      read_file: README.md\n\
-                      User: Create a file hello.py that prints hi\n\
-                      write_file: hello.py | print(\"hi\")\n\
-                      User: Show last 3 git commits\n\
-                      git: log -3\n\
-                      After observing results, you may use complete: <summary> to finish.";
+        let system = MOTE_SYSTEM_PROMPT;
         let body = format!(
             r#"{{"model":"{}","max_tokens":200,"system":"{}","messages":[{{"role":"user","content":"{}"}}]}}"#,
             self.model,
@@ -420,7 +380,7 @@ impl<'a> Runtime<'a> {
         }
     }
 
-    fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, ctx_prefix: &str, capability_used: &mut bool) -> bool {
+    fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, _ctx_prefix: &str, capability_used: &mut bool) -> bool {
         let cap = self.capabilities.iter().find(|c| c.name() == name);
         match cap {
             Some(cap) => match cap.invoke(input) {
