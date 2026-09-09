@@ -1,0 +1,7 @@
+name: weekly-recap
+capabilities: [shell, read_file, write_file, git]
+max_iterations: 20
+model: "gemini-3.5-flash"
+endpoint: ""
+auth: "AQ.Ab8RN6IVKB0Li4DKTANH4nensvg_OYL_VqrFrTpSRxIg18le7g"
+provider: "google"

@@ -3,6 +3,16 @@ use std::process::Command;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+struct ModelEntry {
+    provider: String,
+    model: String,
+    #[serde(default)]
+    endpoint: String,
+    #[serde(default)]
+    auth: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct Manifest {
     name: String,
     #[serde(default)]
@@ -21,6 +31,8 @@ struct Manifest {
     shell_backend: String,
     #[serde(default)]
     output_file: Option<String>,
+    #[serde(default)]
+    model_chain: Vec<ModelEntry>,
 }
 
 fn default_provider() -> String { "openai".into() }
@@ -157,12 +169,20 @@ impl Model for GoogleModel {
     fn infer(&self, prompt: &str) -> Action {
         let system = MOTE_SYSTEM_PROMPT;
         let body = format!(
-            r#"{{"contents":[{{"parts":[{{"text":"{}"}}]}},{{"parts":[{{"text":"{}"}}]}}]}}"#,
+            r#"{{"system_instruction":{{"parts":[{{"text":"{}"}}]}},"contents":[{{"role":"user","parts":[{{"text":"{}"}}]}}]}}"#,
             system.replace('"', "\\\"").replace('\n', " "),
             prompt.replace('"', "\\\"").replace('\n', " ")
         );
         match self.post(&body) {
             Ok(text) => {
+                // Check for API error in JSON response
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(error) = json.pointer("/error/message") {
+                        if let Some(msg) = error.as_str() {
+                            return Action::Complete { summary: format!("gemini error: {}", msg) };
+                        }
+                    }
+                }
                 let content = serde_json::from_str::<serde_json::Value>(&text)
                     .ok()
                     .and_then(|v| v.pointer("/candidates/0/content/parts/0/text").cloned())
@@ -403,7 +423,7 @@ impl Budgets {
 }
 
 struct Runtime<'a> {
-    model: &'a dyn Model,
+    models: Vec<Box<dyn Model + 'a>>,
     capabilities: Vec<Box<dyn Capability>>,
     budget: Budgets,
     state: State,
@@ -412,7 +432,7 @@ struct Runtime<'a> {
 }
 
 impl<'a> Runtime<'a> {
-    fn new(model: &'a dyn Model, manifest: &Manifest) -> Self {
+    fn new(models: Vec<Box<dyn Model + 'a>>, manifest: &Manifest) -> Self {
         let mut capabilities: Vec<Box<dyn Capability>> = Vec::new();
         for cap_name in &manifest.capabilities {
             match cap_name.as_str() {
@@ -428,13 +448,27 @@ impl<'a> Runtime<'a> {
             capabilities.push(Box::new(ShellCap::new(&manifest.shell_backend)));
         }
         Self {
-            model,
+            models,
             capabilities,
             budget: Budgets::new(manifest.max_iterations),
             state: State::Running,
             events: vec![Event::RunStarted],
             output_file: manifest.output_file.clone(),
         }
+    }
+
+    fn try_chain(&mut self, context: &str) -> Action {
+        for model in &self.models {
+            let action = model.infer(context);
+            match &action {
+                Action::Complete { summary } if summary.starts_with("model error") || summary.starts_with("gemini error") => {
+                    self.events.push(Event::ObservationReceived(format!("fallback: {}", summary)));
+                    continue;
+                }
+                _ => return action,
+            }
+        }
+        Action::Complete { summary: "all models exhausted".into() }
     }
 
     fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, _ctx_prefix: &str, capability_used: &mut bool) -> bool {
@@ -467,7 +501,7 @@ impl<'a> Runtime<'a> {
         let mut capability_used = false;
         while self.state == State::Running && !self.budget.exhausted() {
             self.budget.tick();
-            let action = self.model.infer(&context);
+            let action = self.try_chain(&context);
             let action_desc = format!("{:?}", action);
             self.events.push(Event::ActionProposed(action_desc.clone()));
             // Repetition detection
@@ -573,6 +607,25 @@ impl<'a> Runtime<'a> {
     }
 }
 
+fn build_model_chain(manifest: &Manifest) -> Vec<Box<dyn Model>> {
+    let mut chain: Vec<Box<dyn Model>> = Vec::new();
+    for entry in &manifest.model_chain {
+        match entry.provider.as_str() {
+            "google" => chain.push(Box::new(GoogleModel::new(&entry.model, &entry.auth))),
+            "anthropic" => chain.push(Box::new(AnthropicModel::new(&entry.model, &entry.auth))),
+            _ => chain.push(Box::new(CurlModel::new(&entry.endpoint, &entry.model, &entry.auth))),
+        }
+    }
+    if chain.is_empty() {
+        match manifest.provider.as_str() {
+            "google" => chain.push(Box::new(GoogleModel::new(&manifest.model, &manifest.auth))),
+            "anthropic" => chain.push(Box::new(AnthropicModel::new(&manifest.model, &manifest.auth))),
+            _ => chain.push(Box::new(CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth))),
+        }
+    }
+    chain
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let spec_path = args.get(1).map(|s| s.as_str()).unwrap_or("specs/demo.yaml");
@@ -585,18 +638,19 @@ fn main() {
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
     println!("---");
-    let model: Box<dyn Model> = match manifest.provider.as_str() {
-        "google" => Box::new(GoogleModel::new(&manifest.model, &manifest.auth)),
-        "anthropic" => Box::new(AnthropicModel::new(&manifest.model, &manifest.auth)),
-        _ => Box::new(CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth)),
-    };
-    let mut rt = Runtime::new(&*model, &manifest);
+    let chain = build_model_chain(&manifest);
+    let mut rt = Runtime::new(chain, &manifest);
     let final_state = rt.run(task);
     println!("---");
-    for ev in &rt.events { println!("{:?}", ev); }
+    for ev in &rt.events {
+        println!("{:?}", ev);
+    }
     println!("---");
     println!("Final state: {:?}", final_state);
-    println!("Iterations used: {}/{}", rt.budget.iterations, rt.budget.max_iterations);
+    println!(
+        "Iterations used: {}/{}",
+        rt.budget.iterations, rt.budget.max_iterations
+    );
 }
 
 #[cfg(test)]
@@ -620,13 +674,14 @@ mod tests {
                 }
             }
         }
-        let m = TwoStepModel;
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(TwoStepModel)];
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
         };
-        let mut rt = Runtime::new(&m, &manifest);
+        let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test task");
         assert_eq!(state, State::Completed);
         assert_eq!(rt.budget.iterations, 2);
@@ -639,20 +694,21 @@ mod tests {
                 Action::Shell { command: "echo loop".into() }
             }
         }
-        let m = LoopForever;
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(LoopForever)];
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
         };
-        let mut rt = Runtime::new(&m, &manifest);
+        let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("loop");
         assert_eq!(state, State::Failed);
         assert_eq!(rt.budget.iterations, 3);
     }
     #[test]
     fn test_capability_registry() {
-        let m = MockModel;
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(MockModel)];
         let manifest = Manifest {
             name: "t".into(),
             capabilities: vec!["shell".into(), "read_file".into(), "git".into()],
@@ -661,8 +717,9 @@ mod tests {
             endpoint: "http://localhost".into(),
             auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
         };
-        let rt = Runtime::new(&m, &manifest);
+        let rt = Runtime::new(chain, &manifest);
         assert_eq!(rt.capabilities.len(), 3);
     }
     #[test]
@@ -673,13 +730,14 @@ mod tests {
                 Action::Shell { command: "echo same".into() }
             }
         }
-        let m = RepeatModel;
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(RepeatModel)];
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
         };
-        let mut rt = Runtime::new(&m, &manifest);
+        let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("repeat");
         assert_eq!(state, State::Failed);
         assert_eq!(rt.budget.iterations, 4); // 3rd repeat = 4th iteration
@@ -696,13 +754,14 @@ mod tests {
                 }
             }
         }
-        let m = EmptyModel;
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(EmptyModel)];
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
         };
-        let mut rt = Runtime::new(&m, &manifest);
+        let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test empty");
         assert_eq!(state, State::Completed);
         assert_eq!(rt.budget.iterations, 2);
@@ -719,18 +778,69 @@ mod tests {
                 }
             }
         }
-        let m = WriteModel;
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(WriteModel)];
         let out_path = "test_output_file.txt".to_string();
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: Some(out_path.clone()),
+            model_chain: Vec::new(),
         };
-        let mut rt = Runtime::new(&m, &manifest);
+        let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test output");
         assert_eq!(state, State::Completed);
         let written = fs::read_to_string(&out_path).expect("output file not written");
         assert_eq!(written, "report content here");
         fs::remove_file(&out_path).ok();
+    }
+    #[test]
+    fn test_model_chain_fallback() {
+        struct FailFirstModel;
+        impl Model for FailFirstModel {
+            fn infer(&self, _: &str) -> Action {
+                Action::Complete { summary: "gemini error: quota exceeded".into() }
+            }
+        }
+        struct SecondModel;
+        impl Model for SecondModel {
+            fn infer(&self, prompt: &str) -> Action {
+                if prompt.contains("Observation") {
+                    Action::Complete { summary: "second model done".into() }
+                } else {
+                    Action::Shell { command: "echo second".into() }
+                }
+            }
+        }
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(FailFirstModel), Box::new(SecondModel)];
+        let manifest = Manifest {
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
+        };
+        let mut rt = Runtime::new(chain, &manifest);
+        let state = rt.run("test fallback");
+        assert_eq!(state, State::Completed);
+        assert_eq!(state, State::Completed);
+    }
+    #[test]
+    fn test_all_models_exhausted() {
+        struct FailModel;
+        impl Model for FailModel {
+            fn infer(&self, _: &str) -> Action {
+                Action::Complete { summary: "model error: network".into() }
+            }
+        }
+        let chain: Vec<Box<dyn Model>> = vec![Box::new(FailModel)];
+        let manifest = Manifest {
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
+            model_chain: Vec::new(),
+        };
+        let mut rt = Runtime::new(chain, &manifest);
+        let state = rt.run("test exhausted");
+        // When all models fail and no capability was used, the task fails
+        assert_eq!(state, State::Failed);
     }
 }

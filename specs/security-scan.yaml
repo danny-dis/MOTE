@@ -1,0 +1,7 @@
+name: security-scan
+capabilities: [shell, read_file]
+max_iterations: 15
+model: "gemini-3.5-flash"
+endpoint: ""
+auth: "AQ.Ab8RN6IVKB0Li4DKTANH4nensvg_OYL_VqrFrTpSRxIg18le7g"
+provider: "google"

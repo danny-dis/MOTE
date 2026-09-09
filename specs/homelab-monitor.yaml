@@ -1,0 +1,17 @@
+name: homelab-monitor
+capabilities: [shell, read_file, write_file]
+max_iterations: 12
+model: "gemini-3.6-flash"
+endpoint: ""
+auth: "AQ.Ab8RN6IVKB0Li4DKTANH4nensvg_OYL_VqrFrTpSRxIg18le7g"
+provider: "google"
+shell_backend: "auto"
+output_file: "C:/Users/pc/agents/MOTE/reports/homelab-latest.md"
+model_chain:
+  - provider: "google"
+    model: "gemini-3.6-flash"
+    auth: "AQ.Ab8RN6IVKB0Li4DKTANH4nensvg_OYL_VqrFrTpSRxIg18le7g"
+  - provider: "openai"
+    model: "groq/compound-mini"
+    endpoint: "https://api.groq.com/openai/v1/chat/completions"
+    auth: ""
