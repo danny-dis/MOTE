@@ -1,9 +1,0 @@
-name: test-hermes-nous
-capabilities: [shell, read_file, write_file]
-max_iterations: 6
-model: "meituan/longcat-2.0:free"
-endpoint: "https://inference-api.nousresearch.com/v1/chat/completions"
-auth: ""
-provider: "openai"
-shell_backend: "auto"
-output_file: "C:/Users/pc/agents/MOTE/reports/test-hermes-nous.md"
