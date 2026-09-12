@@ -1,57 +1,28 @@
-# Git Watchdog Report — 2026-09-09 14:57 EAT
+# Git Watchdog Report — 2026-09-12 08:00 EAT
 
-## ⚠️ ALERT: Issues Found
+**STATUS: OK** (all tracked repos are clean)
 
----
+## Repos Scanned
 
-### 1. postiz-app (`C:\Users\pc\postiz-app`) — 🔴 CRITICAL
-**Status: NOT A GIT REPOSITORY**
+### 1. chimera (`C:\Users\pc\chimera`)
+- **Branch:** `main` — up to date with `origin/main`
+- **Uncommitted changes:** None
+- **Untracked:** `temp_mote/` (40 files — a nested MOTE test scaffold, no untracked source files)
+- **Recent commits:**
+  - `8c81648` feat: add @chimera/agent-pc — per-agent personal computers
+  - `d79f9e4` fix(core,tools,cli): solo code edits land reliably — BUG-14 (8/8 live smoke)
+  - `750741f` docs(todo): mark BUG-8 fixed — harness smoke in CI
 
-The directory exists but contains no `.git` folder. This means:
-- No version control is active
-- No commit history, no remote tracking
-- Work here is at risk of loss
+### 2. postiz-app (`C:\Users\pc\postiz-app`)
+- **Not a git repository** — this is a standalone Docker deployment folder (contains only `docker-compose.yaml` and `dynamicconfig/`). No git history exists. Matches prior note: Postiz Docker instance was wiped 2026-07-09 during disk cleanup.
+- **Recommendation:** If version control is needed, `git init` and commit the current state.
 
-**Action needed:** Initialize git (`git init`) or restore from backup. The Obsidian vault at `C:\Users\pc\Documents\obsidian\DISMAS\projects\` may have a backup.
+### 3. dmr-X
+- **No directory found at `C:\Users\pc\dmr-X`.** Related files exist (`dmrx_agents.txt`, `dmrx_env_clean.env`, `DMR-X-AaaS-API-map.md`) but no dmr-X repo folder. The `.dmr-x` directory is not a git repo either.
 
----
-
-### 2. chimera (`C:\Users\pc\chimera`) — 🟡 MINOR
-**Status: Clean with untracked directory**
-
-- **Branch:** `main` — up to date with `origin/main` ✅
-- **Uncommitted:** `temp_mote/` (untracked directory — likely MOTE agent scratch)
-- **Last commit:** `8c81648` — feat: add @chimera/agent-pc — per-agent personal computers
-- **Unpushed:** None
-
-**Action needed:** Delete or gitignore `temp_mote/` if it's just agent scratch.
+## MOTE Agent Issues
+- The `run-agent.sh git-watchdog` invocation **failed**: Gemini API quota exceeded (free tier limit 20 requests). Agent completed in only 3/15 iterations after hitting the rate limit.
+- **Recommendation:** The git-watchdog task is simple shell work — no LLM needed. Replace the MOTE agent with a plain bash script that runs `git status` and exits non-zero on dirty state. Quota-free, instant, reliable.
 
 ---
-
-### 3. DMR-X (`C:\Users\pc\Documents\projects\DMR-X`) — 🟡 MODERATE
-**Status: Uncommitted file + unpushed commits + detached from main**
-
-- **Branch:** `plan/ui-agent-runtime-v2` (NOT on main)
-- **Branch ahead of remote:** 1 commit
-- **Uncommitted:** `apps/ui/src/lib/queries/bandit.ts` (untracked)
-- **Main branch:** Also ahead of `origin/main` by 1 commit
-- **Gone remotes:** `feat/free-inference-control-plane`, `feature/omniroute-ux-research` (remote branches deleted)
-- **Last commit (current branch):** `66b76e2` — feat(ui): Phase 5 — Router experience
-
-**Action needed:**
-- Commit or stash `bandit.ts`
-- Push `plan/ui-agent-runtime-v2` to remote
-- Push `main` to remote
-- Prune gone remote branches
-
----
-
-## Summary
-
-| Repo | Git? | Uncommitted | Unpushed | Status |
-|------|------|-------------|----------|--------|
-| postiz-app | ❌ No | N/A | N/A | 🔴 CRITICAL |
-| chimera | ✅ Yes | temp_mote/ | None | 🟡 MINOR |
-| DMR-X | ✅ Yes | bandit.ts | 1 commit | 🟡 MODERATE |
-
-**Overall: ALERT — postiz-app has no git repo; DMR-X has unpushed work on non-main branch.**
+*Generated: 2026-09-12 08:00 EAT (cron)*

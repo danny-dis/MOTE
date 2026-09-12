@@ -1,9 +1,0 @@
-name: test-good-model
-capabilities: [shell, read_file, write_file]
-max_iterations: 10
-model: "openai/gpt-4o-mini"
-endpoint: "https://openrouter.ai/api/v1/chat/completions"
-auth: "***REMOVED***"
-provider: "openai"
-shell_backend: "auto"
-output_file: "C:/Users/pc/agents/MOTE/reports/test-output.md"

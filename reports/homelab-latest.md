@@ -1,22 +1,34 @@
 # Homelab Monitor Report
-**Time:** Wed, Sep 9, 2026 5:04 PM (EAT)
+**Generated:** $(date)
+**Agent:** homelab-monitor (manual fallback — MOTE binary hung on API calls)
 
-## Disk Space (C:)
-- **Free:** 25.5 GB / 237.9 GB
-- **Free %:** 10.74%
-- **Status:** ⚠️ **ALERT — Below 15% threshold**
+---
 
-## Docker
-- **Status:** Not installed or not in PATH
+## 1. Disk Space
+| Drive | Size | Used | Avail | Use% |
+|-------|------|------|-------|------|
+| C:    | 238G | 219G | 20G   | 92%  |
 
-## Network
-- **Ping 8.8.8.8:** OK (12ms, 0% loss)
+⚠️ **ALERT: C: drive at 92% usage, only 20GB free (below 15% threshold)**
 
-## Services Running
-- **node:** 4 processes (PIDs: 564, 2820, 4292, 11500)
-- **python:** 15 processes (PIDs: 5008, 5736, 6592, 7304, 11464, 11564, 11624, 11664, 11924, 11944, 11964, 12008, 12268, 12276, 12284, 12368)
-- **docker:** Not running
-- **nginx:** Not running
+## 2. Docker
+- Docker command not found on PATH
+- Docker Desktop not installed in standard location
+- Status: **Not running / Not installed**
+
+## 3. Services (tasklist)
+Active processes detected:
+- **node.exe**: 4 instances (PIDs 5792, 3436, 10652, 9116)
+- **python.exe**: 15+ instances including pythonw.exe (PIDs 6892, 6920, 10212, 1096, 9740, 10080, 10176, 9480, 7648, 8552, 9520, 9432, 528, 7204, 10072, 4408)
+- Hermes agents appear to be running
+
+## 4. Network
+- Ping 8.8.8.8: **OK** (30ms, 0% loss)
+
+---
 
 ## Summary
-⚠️ **ALERT: Disk C: is at 10.74% free space (25.5 GB remaining). Clean up recommended.**
+⚠️ **ALERT: C: drive critically low (20GB free / 92% used)**
+- MOTE binary unable to complete (API timeout on nex-agi/nex-n2.5-mini:free)
+- Docker not detected on system
+- Network connectivity OK
