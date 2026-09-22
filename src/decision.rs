@@ -300,8 +300,32 @@ mod tests {
         let address = listener.local_addr().unwrap();
         thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0_u8; 8192];
-            let _ = stream.read(&mut request);
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 8192];
+            loop {
+                let read = stream.read(&mut buffer).unwrap();
+                assert!(read > 0, "client disconnected before sending request");
+                request.extend_from_slice(&buffer[..read]);
+                if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&request[..end]);
+                    let length = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.split_once(':').and_then(|(name, value)| {
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().ok())
+                                    .flatten()
+                            })
+                        })
+                        .expect("request must have Content-Length");
+                    if request.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
             let body = serde_json::json!({
                 "model": "jev-1.13.0",
                 "answers": {
