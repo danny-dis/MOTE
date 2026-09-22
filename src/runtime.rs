@@ -323,21 +323,30 @@ impl Runtime {
                 return Ok(result);
             }
         }
-        if let crate::decision::DecisionQuestion::Choice { criteria, .. } = &request.question {
-            if !self
-                .decision_fallback
-                .as_deref()
-                .is_some_and(|choice| criteria.contains_key(choice))
-            {
+        let fallback = match &request.question {
+            crate::decision::DecisionQuestion::Choice { criteria, .. } => {
+                let choice = self
+                    .decision_fallback
+                    .as_deref()
+                    .ok_or("decision provider failed and no fail-closed fallback is configured")?;
+                if !matches!(choice, "deny" | "reject" | "block" | "escalate")
+                    || !criteria.contains_key(choice)
+                {
+                    return Err("decision fallback must name an explicit denying choice".to_owned());
+                }
+                deterministic_fallback(request, Some(choice))
+            }
+            crate::decision::DecisionQuestion::Score { .. }
+            | crate::decision::DecisionQuestion::Noul { .. } => {
                 return Err(
-                    "decision provider failed and no valid fail-closed fallback is configured"
-                        .to_owned(),
+                    "decision provider failed; numeric answers cannot fail closed".to_owned(),
                 );
             }
-        }
+        };
+        decision::validate_answer(request, &fallback)?;
         Ok(DecisionResult {
             model: "deterministic-fallback".to_owned(),
-            answer: deterministic_fallback(request, self.decision_fallback.as_deref()),
+            answer: fallback,
             source: "fallback".to_owned(),
             usage: DecisionUsage::default(),
         })
@@ -590,6 +599,53 @@ mod tests {
         runtime.decision_fallback = Some("deny".to_owned());
         assert!(matches!(runtime.decide(&request).unwrap().answer,
             DecisionAnswer::Choice { choice, .. } if choice == "deny"));
+    }
+
+    #[test]
+    fn decision_failure_rejects_permissive_fallback() {
+        use crate::decision::{DecisionQuestion, DecisionRequest};
+        use std::collections::BTreeMap;
+        let manifest = Manifest::from_yaml("name: gate\ncapabilities: [decision]\n").unwrap();
+        let workspace = WorkspaceFs::new(std::env::current_dir().unwrap()).unwrap();
+        let mut runtime = Runtime::new(&manifest, workspace).unwrap();
+        runtime.decision_fallback = Some("allow".to_owned());
+        let request = DecisionRequest {
+            id: "gate".to_owned(),
+            state: serde_json::json!({}),
+            question: DecisionQuestion::Choice {
+                instructions: "Choose".to_owned(),
+                criteria: BTreeMap::from([
+                    ("allow".to_owned(), "allow".to_owned()),
+                    ("deny".to_owned(), "deny".to_owned()),
+                ]),
+            },
+        };
+        assert!(runtime.decide(&request).is_err());
+    }
+
+    #[test]
+    fn decision_failure_does_not_invent_numeric_answer() {
+        use crate::decision::{DecisionQuestion, DecisionRequest};
+        let manifest = Manifest::from_yaml("name: gate\ncapabilities: [decision]\n").unwrap();
+        let workspace = WorkspaceFs::new(std::env::current_dir().unwrap()).unwrap();
+        let runtime = Runtime::new(&manifest, workspace).unwrap();
+        for question in [
+            DecisionQuestion::Score {
+                instructions: "Score".to_owned(),
+                criteria: vec!["low".to_owned(), "high".to_owned()],
+            },
+            DecisionQuestion::Noul {
+                instructions: "Quantify".to_owned(),
+            },
+        ] {
+            assert!(runtime
+                .decide(&DecisionRequest {
+                    id: "gate".to_owned(),
+                    state: serde_json::json!({}),
+                    question,
+                })
+                .is_err());
+        }
     }
 
     #[test]
