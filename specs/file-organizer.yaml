@@ -1,7 +1,9 @@
 name: file-organizer
-capabilities: [shell, read_file, write_file, list_dir]
+workspace: ..
+capabilities: [read_file, write_file, list_dir]
 max_iterations: 15
-model: "gemini-3.5-flash"
-endpoint: ""
-auth: "***REMOVED***"
-provider: "google"
+models:
+  - provider: gemini
+    model: gemini-2.0-flash
+    endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+    auth_env: GOOGLE_API_KEY

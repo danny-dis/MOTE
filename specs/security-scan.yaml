@@ -1,7 +1,12 @@
 name: security-scan
+workspace: ..
 capabilities: [shell, read_file]
 max_iterations: 15
-model: "gemini-3.5-flash"
-endpoint: ""
-auth: "***REMOVED***"
-provider: "google"
+shell:
+  allowed_programs: [cargo, git]
+  unsafe_shell: false
+models:
+  - provider: gemini
+    model: gemini-2.0-flash
+    endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent
+    auth_env: GOOGLE_API_KEY

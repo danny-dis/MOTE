@@ -18,7 +18,7 @@ A MOTE instance can start as a minimal worker and acquire additional capabilitie
 
 ```text
              Agent Specification
-                 (Markdown)
+                 (YAML)
                       |
                       v
               +---------------+
@@ -84,7 +84,7 @@ Maintain this repository and keep changes aligned with its engineering standards
 - Do not publish credentials.
 ```
 
-MOTE treats this as a specification, not as executable code. The runtime resolves requested capabilities against an external policy and capability registry.
+The current CLI reads YAML manifests. `AGENT.md` and external authorization/policy integration remain design goals, not implemented security controls.
 
 ## Extensibility
 
@@ -138,10 +138,20 @@ MOTE is not intended to initially be:
 
 Those capabilities may be integrated externally when useful.
 
-## Status
+## Status and quick start
 
-MOTE is currently a specification and engineering project. The first implementation should validate the minimal runtime before adding higher-level features.
+MOTE 0.12.0 contains a Rust library (`src/lib.rs`) and CLI (`src/main.rs`). A YAML manifest selects the model provider, workspace, and allowed capabilities. The current actions are `shell`, `read_file`, `write_file`, `list_dir`, `git`, `decision`, and `complete`. A task must use at least one permitted capability before completion.
+
+```bash
+cargo build --release
+# Configure a reachable OpenAI-compatible endpoint in specs/dmr-x-local.yaml first.
+./target/release/mote --jsonl specs/dmr-x-local.yaml "Describe the workspace"
+```
+
+`--jsonl` emits structured lifecycle events. Model credentials are read from the environment variable named by a manifest's `auth_env`, never stored in example YAML. See `specs/` for examples and `docs/STATUS.md` for implementation status.
+
+**Security boundary:** capabilities are deny-by-default and built-in file actions check workspace paths, but shell and Git launch normal OS processes with the invoking user's permissions. An executable allowlist and timeout are **not an OS sandbox**: permitted programs and their arguments may access files, network, subprocesses, and secrets outside the workspace. Use an externally isolated account/container/VM for untrusted model output or repositories; do not treat the manifest as authorization on its own. Cancellation and time limits are best-effort rather than a guarantee against child processes or blocked network calls. JSONL events include raw actions and observations, and observations are sent to the configured model endpoint; do not point MOTE at sensitive workspaces or share its event logs without review.
 
 ## License
 
-License to be selected before the first public release.
+No license has been selected. All rights are reserved unless the owner grants permission separately.

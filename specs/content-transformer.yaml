@@ -1,6 +1,9 @@
 name: content-transformer
+workspace: ..
 capabilities: [read_file, write_file]
 max_iterations: 10
-model: "groq/compound-mini"
-endpoint: "https://api.groq.com/openai/v1/chat/completions"
-auth: "***REMOVED***"
+models:
+  - provider: openai-compatible
+    model: llama-3.1-8b-instant
+    endpoint: https://api.groq.com/openai/v1/chat/completions
+    auth_env: GROQ_API_KEY
