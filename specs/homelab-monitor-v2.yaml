@@ -1,0 +1,7 @@
+name: homelab-monitor-v2
+capabilities: [shell, read_file, write_file]
+max_iterations: 12
+model: "gpt-4o-mini"
+endpoint: "https://api.openai.com/v1/chat/completions"
+auth: ""
+provider: "openai"

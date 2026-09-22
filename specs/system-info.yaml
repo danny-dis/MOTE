@@ -1,0 +1,7 @@
+name: system-info
+capabilities: [shell]
+max_iterations: 10
+model: "gemini-3.5-flash"
+endpoint: ""
+auth: "***REMOVED***"
+provider: "google"

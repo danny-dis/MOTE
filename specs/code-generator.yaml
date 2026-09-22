@@ -1,0 +1,7 @@
+name: code-generator
+capabilities: [write_file, shell]
+max_iterations: 15
+model: "gemini-3.5-flash"
+endpoint: ""
+auth: "***REMOVED***"
+provider: "google"
