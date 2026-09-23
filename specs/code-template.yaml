@@ -1,9 +1,12 @@
 name: code-template
+workspace: ..
 capabilities: [shell, read_file, write_file, git]
-max_iterations: 8
-model: "~openai/gpt-mini-latest"
-endpoint: "http://localhost:47113/v1/chat/completions"
-auth: ""
-provider: "openai"
-shell_backend: "auto"
-output_file: "C:/Users/pc/agents/MOTE/reports/code-template-latest.md"
+max_iterations: 12
+shell:
+  allowed_programs: [cargo, rustc, python, node, git]
+  unsafe_shell: false
+models:
+  - provider: dmr-x
+    model: auto
+    endpoint: http://127.0.0.1:47113/v1/chat/completions
+output_file: reports/code-template-latest.md

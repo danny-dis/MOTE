@@ -1,0 +1,9 @@
+# MOTE 0.12.1 status
+
+MOTE is a Rust library and CLI for bounded, trusted-workspace agent tasks. The YAML manifest selects a model chain, workspace, and explicit capabilities; no capability is granted by default. The CLI supports `--jsonl` lifecycle events. Built-in actions are `shell`, `read_file`, `write_file`, `list_dir`, `git`, optional typed `decision`, and `complete`.
+
+**Implemented:** workspace checks for built-in file actions; allowlisted executable/limited Git modes; iteration, runtime, command, response-size and per-tool limits (`max_per_tool`, default 5 physical calls per action type); bounded retries for transient `read_file` and `list_dir` failures only; model fallback and one empty-response retry; cancellation and fail-closed decision fallback. A successful explicit write to `output_file` completes the run. A `complete:` summary writes a fresh report (replacing an older report); a failed write fails the run rather than treating stale content as new output. Shell, Git and writes are never auto-retried.
+
+**Not implemented or not verified:** OS sandboxing, guaranteed termination of child processes or blocked network calls, independent authorization/policy service, AGENT.md loader, arbitrary extension SDK, installed scheduler, WhatsApp alert routing, or live reliability across remote providers. Executables and Git run with the invoking user's permissions and may access network, host files, and secrets outside the workspace. JSONL observations are sent to the model endpoint; do not run on sensitive data without isolation and log review.
+
+Local validation and the exact merged-commit CI result are reported with the commit; older green CI runs do not validate this merge. The specs include example endpoints, not proof those services are running. `run-agent.sh` is an optional wrapper whose failure exit code may be used by an external scheduler; it does not schedule tasks itself.

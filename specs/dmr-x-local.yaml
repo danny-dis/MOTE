@@ -1,4 +1,4 @@
-name: demo
+name: dmr-x-local
 workspace: ..
 capabilities: [list_dir, read_file]
 max_iterations: 8

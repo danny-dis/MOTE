@@ -1,43 +1,10 @@
-# MOTE Homelab Monitor Agent
+# MOTE homelab monitor example
 
-A scheduled health-check agent that runs on top of MOTE to monitor your homelab infrastructure.
+**Status:** `specs/homelab-monitor.yaml` is an example workload, not evidence of an installed two-hour schedule or live alert delivery. Its configured DMR-X endpoint must be running. It grants `shell`, `read_file`, and `write_file`; the shell allowlist contains `powershell` and `docker`. Those programs retain the invoking user's permissions — this is **not** an OS sandbox.
 
-## What it does (every 2 hours)
-
-1. **Disk space** — checks all drives, alerts below 15% free
-2. **Docker** — lists running/stopped containers, alerts on unexpected stops
-3. **Services** — checks critical services (Postiz, OpenClaw, etc.)
-4. **Network** — pings gateway, checks internet, DNS resolution
-5. **Git repos** — scans for uncommitted changes, unpushed commits
-6. **Report** — writes a timestamped status report to `~/homelab-reports/`
-7. **Alert** — if anything is wrong, outputs a summary for the cron job to forward
-
-## Agent Spec
-
-```yaml
-name: homelab-monitor
-capabilities: [shell, read_file, write_file]
-max_iterations: 12
-model: "gemini-3.5-flash"
-provider: "google"
+```bash
+cargo build --release
+./run-agent.sh homelab-monitor
 ```
 
-## Task Prompt
-
-```
-You are a homelab monitoring agent. Run these checks and report:
-
-1. Disk space: Get free space on all drives. Alert if any drive is below 15% free.
-2. Docker: List all containers (running and stopped). Note any that are unexpectedly stopped.
-3. Services: Check if these processes are running: docker, node, python, nginx.
-4. Network: Ping 8.8.8.8 and 1.1.1.1. Check if google.com resolves.
-5. Git repos: Check C:\Users\pc\postiz-app and C:\Users\pc\chimera for uncommitted changes.
-6. Write a report to C:\Users\pc\homelab-reports\{timestamp}.md with all findings.
-7. If any check fails, end with "ALERT: [issue]". If all good, end with "STATUS: OK".
-
-Be thorough but concise. Use shell commands to gather real data.
-```
-
-## Schedule
-
-Run every 2 hours via Hermes cron. On failure, send alert to WhatsApp.
+The runner asks MOTE to inspect disk, Docker, and service health and write `reports/homelab-latest.md` under the configured workspace. It returns a nonzero exit on MOTE failure or if the newly written report contains `ALERT:`; an external scheduler may route that exit status. The runner does not install cron jobs, send WhatsApp messages, or guarantee that a model successfully wrote a current report. Existing `reports/` files are historical samples. For real monitoring, verify the endpoint, report timestamp/content, and scheduler/notification integration separately. See [docs/STATUS.md](docs/STATUS.md).

@@ -1,0 +1,8 @@
+name: keyless-pollinations
+workspace: ..
+capabilities: [list_dir, read_file]
+max_iterations: 10
+models:
+  - provider: openai
+    model: gpt-oss-20b
+    endpoint: https://text.pollinations.ai/openai
