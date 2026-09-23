@@ -1,9 +1,9 @@
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 use std::process::Stdio;
 use std::time::Duration;
-use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct ModelEntry {
@@ -40,16 +40,33 @@ struct Manifest {
     model_chain: Vec<ModelEntry>,
 }
 
-fn default_provider() -> String { "openai".into() }
-fn default_shell_backend() -> String { "auto".into() }
-fn default_max_iters() -> usize { 20 }
-fn default_max_per_tool() -> usize { 5 }
-fn default_model() -> String { "groq/compound-mini".into() }
-fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
-fn default_auth() -> String { String::new() }
+fn default_provider() -> String {
+    "openai".into()
+}
+fn default_shell_backend() -> String {
+    "auto".into()
+}
+fn default_max_iters() -> usize {
+    20
+}
+fn default_max_per_tool() -> usize {
+    5
+}
+fn default_model() -> String {
+    "groq/compound-mini".into()
+}
+fn default_endpoint() -> String {
+    "https://api.groq.com/openai/v1/chat/completions".into()
+}
+fn default_auth() -> String {
+    String::new()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum ErrorType { Transient, Permanent }
+enum ErrorType {
+    Transient,
+    Permanent,
+}
 
 fn classify_error(msg: &str) -> ErrorType {
     let lower = msg.to_lowercase();
@@ -122,16 +139,24 @@ struct CurlModel {
 
 impl CurlModel {
     fn new(endpoint: &str, model: &str, auth: &str) -> Self {
-        Self { endpoint: endpoint.into(), model: model.into(), auth: auth.into() }
+        Self {
+            endpoint: endpoint.into(),
+            model: model.into(),
+            auth: auth.into(),
+        }
     }
 
     fn post(&self, body: &str) -> Result<String, String> {
         let mut cmd = Command::new("curl");
         cmd.arg("-s")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Content-Type: application/json")
-            .arg("-H").arg(format!("Authorization: Bearer {}", self.auth))
-            .arg("-d").arg(body)
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-H")
+            .arg(format!("Authorization: Bearer {}", self.auth))
+            .arg("-d")
+            .arg(body)
             .arg(&self.endpoint);
         let output = cmd.output().map_err(|e| e.to_string())?;
         if output.status.success() {
@@ -145,7 +170,11 @@ impl CurlModel {
 impl Model for CurlModel {
     fn infer(&self, prompt: &str) -> Action {
         let system = MOTE_SYSTEM_PROMPT;
-        let escape = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', " ");
+        let escape = |s: &str| {
+            s.replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', " ")
+        };
         let body = format!(
             r#"{{"model":"{}","messages":[{{"role":"system","content":"{}"}},{{"role":"user","content":"{}"}}],"max_tokens":200}}"#,
             self.model,
@@ -161,7 +190,9 @@ impl Model for CurlModel {
                     .unwrap_or_default();
                 parse_action(&content)
             }
-            Err(e) => Action::Complete { summary: format!("model error: {}", e) },
+            Err(e) => Action::Complete {
+                summary: format!("model error: {}", e),
+            },
         }
     }
 }
@@ -174,7 +205,10 @@ struct GoogleModel {
 
 impl GoogleModel {
     fn new(model: &str, auth: &str) -> Self {
-        Self { model: model.into(), auth: auth.into() }
+        Self {
+            model: model.into(),
+            auth: auth.into(),
+        }
     }
 
     fn post(&self, body: &str) -> Result<String, String> {
@@ -184,9 +218,12 @@ impl GoogleModel {
         );
         let mut cmd = Command::new("curl");
         cmd.arg("-s")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Content-Type: application/json")
-            .arg("-d").arg(body)
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-d")
+            .arg(body)
             .arg(&url);
         let output = cmd.output().map_err(|e| e.to_string())?;
         if output.status.success() {
@@ -211,7 +248,9 @@ impl Model for GoogleModel {
                 if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(error) = json.pointer("/error/message") {
                         if let Some(msg) = error.as_str() {
-                            return Action::Complete { summary: format!("gemini error: {}", msg) };
+                            return Action::Complete {
+                                summary: format!("gemini error: {}", msg),
+                            };
                         }
                     }
                 }
@@ -222,7 +261,9 @@ impl Model for GoogleModel {
                     .unwrap_or_default();
                 parse_action(&content)
             }
-            Err(e) => Action::Complete { summary: format!("model error: {}", e) },
+            Err(e) => Action::Complete {
+                summary: format!("model error: {}", e),
+            },
         }
     }
 }
@@ -235,17 +276,25 @@ struct AnthropicModel {
 
 impl AnthropicModel {
     fn new(model: &str, auth: &str) -> Self {
-        Self { model: model.into(), auth: auth.into() }
+        Self {
+            model: model.into(),
+            auth: auth.into(),
+        }
     }
 
     fn post(&self, body: &str) -> Result<String, String> {
         let mut cmd = Command::new("curl");
         cmd.arg("-s")
-            .arg("-X").arg("POST")
-            .arg("-H").arg("Content-Type: application/json")
-            .arg("-H").arg("anthropic-version: 2023-06-01")
-            .arg("-H").arg(format!("x-api-key: {}", self.auth))
-            .arg("-d").arg(body)
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-H")
+            .arg("anthropic-version: 2023-06-01")
+            .arg("-H")
+            .arg(format!("x-api-key: {}", self.auth))
+            .arg("-d")
+            .arg(body)
             .arg("https://api.anthropic.com/v1/messages");
         let output = cmd.output().map_err(|e| e.to_string())?;
         if output.status.success() {
@@ -274,7 +323,9 @@ impl Model for AnthropicModel {
                     .unwrap_or_default();
                 parse_action(&content)
             }
-            Err(e) => Action::Complete { summary: format!("model error: {}", e) },
+            Err(e) => Action::Complete {
+                summary: format!("model error: {}", e),
+            },
         }
     }
 }
@@ -290,34 +341,40 @@ fn parse_action(content: &str) -> Action {
         if summary.is_empty() {
             return Action::Retry;
         }
-        Action::Complete { summary: summary.into() }
+        Action::Complete {
+            summary: summary.into(),
+        }
     } else if lower.starts_with("shell:") {
-        Action::Shell { command: trimmed[6..].trim().into() }
+        Action::Shell {
+            command: trimmed[6..].trim().into(),
+        }
     } else if lower.starts_with("read_file:") {
-        Action::ReadFile { path: trimmed[10..].trim().into() }
+        Action::ReadFile {
+            path: trimmed[10..].trim().into(),
+        }
     } else if lower.starts_with("write_file:") {
         let rest = &trimmed[11..];
         if let Some((path, content_text)) = rest.split_once('|') {
-            Action::WriteFile { path: path.trim().into(), content: content_text.trim().into() }
+            Action::WriteFile {
+                path: path.trim().into(),
+                content: content_text.trim().into(),
+            }
         } else {
-            Action::Complete { summary: "write_file format: path | content".into() }
+            Action::Complete {
+                summary: "write_file format: path | content".into(),
+            }
         }
     } else if lower.starts_with("list_dir:") {
-        Action::ListDir { path: trimmed[9..].trim().into() }
+        Action::ListDir {
+            path: trimmed[9..].trim().into(),
+        }
     } else if lower.starts_with("git:") {
-        Action::Git { args: trimmed[4..].trim().into() }
+        Action::Git {
+            args: trimmed[4..].trim().into(),
+        }
     } else {
-        Action::Complete { summary: trimmed.into() }
-    }
-}
-
-struct EchoModel;
-impl Model for EchoModel {
-    fn infer(&self, prompt: &str) -> Action {
-        if prompt.contains("done") {
-            Action::Complete { summary: "task finished".into() }
-        } else {
-            Action::Shell { command: "echo hello from MOTE".into() }
+        Action::Complete {
+            summary: trimmed.into(),
         }
     }
 }
@@ -348,7 +405,9 @@ impl ShellCap {
 }
 
 impl Capability for ShellCap {
-    fn name(&self) -> &str { "shell" }
+    fn name(&self) -> &str {
+        "shell"
+    }
     fn invoke(&self, cmd: &str) -> Result<String, String> {
         // On Windows, detect powershell commands and route directly
         let (program, arg) = if self.backend == "cmd" && cmd.trim().starts_with("powershell") {
@@ -383,7 +442,9 @@ impl Capability for ShellCap {
 
 struct ReadFileCap;
 impl Capability for ReadFileCap {
-    fn name(&self) -> &str { "read_file" }
+    fn name(&self) -> &str {
+        "read_file"
+    }
     fn invoke(&self, path: &str) -> Result<String, String> {
         fs::read_to_string(path).map_err(|e| e.to_string())
     }
@@ -391,7 +452,9 @@ impl Capability for ReadFileCap {
 
 struct WriteFileCap;
 impl Capability for WriteFileCap {
-    fn name(&self) -> &str { "write_file" }
+    fn name(&self) -> &str {
+        "write_file"
+    }
     fn invoke(&self, input: &str) -> Result<String, String> {
         if let Some((path, content)) = input.split_once('|') {
             fs::write(path.trim(), content.trim()).map_err(|e| e.to_string())?;
@@ -404,7 +467,9 @@ impl Capability for WriteFileCap {
 
 struct ListDirCap;
 impl Capability for ListDirCap {
-    fn name(&self) -> &str { "list_dir" }
+    fn name(&self) -> &str {
+        "list_dir"
+    }
     fn invoke(&self, path: &str) -> Result<String, String> {
         let entries = fs::read_dir(path).map_err(|e| e.to_string())?;
         let mut result = String::new();
@@ -420,10 +485,14 @@ impl Capability for ListDirCap {
 
 struct GitCap;
 impl Capability for GitCap {
-    fn name(&self) -> &str { "git" }
+    fn name(&self) -> &str {
+        "git"
+    }
     fn invoke(&self, args: &str) -> Result<String, String> {
-        let output = std::process::Command::new("git").args(args.split_whitespace())
-            .output().map_err(|e| e.to_string())?;
+        let output = std::process::Command::new("git")
+            .args(args.split_whitespace())
+            .output()
+            .map_err(|e| e.to_string())?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if output.status.success() {
@@ -435,7 +504,11 @@ impl Capability for GitCap {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum State { Running, Completed, Failed, Cancelled }
+enum State {
+    Running,
+    Completed,
+    Failed,
+}
 
 #[derive(Debug)]
 enum Event {
@@ -452,9 +525,18 @@ struct Budgets {
 }
 
 impl Budgets {
-    fn new(max: usize) -> Self { Self { max_iterations: max, iterations: 0 } }
-    fn exhausted(&self) -> bool { self.iterations >= self.max_iterations }
-    fn tick(&mut self) { self.iterations += 1; }
+    fn new(max: usize) -> Self {
+        Self {
+            max_iterations: max,
+            iterations: 0,
+        }
+    }
+    fn exhausted(&self) -> bool {
+        self.iterations >= self.max_iterations
+    }
+    fn tick(&mut self) {
+        self.iterations += 1;
+    }
 }
 
 struct Runtime<'a> {
@@ -506,23 +588,34 @@ impl<'a> Runtime<'a> {
         loop {
             let action = self.models[self.current_model_idx].infer(context);
             match &action {
-                Action::Complete { summary } if summary.starts_with("model error") || summary.starts_with("gemini error") => {
-                    self.events.push(Event::ObservationReceived(format!("fallback: {}", summary)));
+                Action::Complete { summary }
+                    if summary.starts_with("model error")
+                        || summary.starts_with("gemini error") =>
+                {
+                    self.events
+                        .push(Event::ObservationReceived(format!("fallback: {}", summary)));
                     self.current_model_idx = (self.current_model_idx + 1) % self.models.len();
                     empty_retries = 0;
                     if self.current_model_idx == start {
-                        return Action::Complete { summary: "all models exhausted".into() };
+                        return Action::Complete {
+                            summary: "all models exhausted".into(),
+                        };
                     }
                     continue;
                 }
                 Action::Retry => {
                     empty_retries += 1;
                     if empty_retries >= 2 {
-                        self.events.push(Event::ObservationReceived(format!("fallback: model {} returned empty {} times", self.current_model_idx, empty_retries)));
+                        self.events.push(Event::ObservationReceived(format!(
+                            "fallback: model {} returned empty {} times",
+                            self.current_model_idx, empty_retries
+                        )));
                         self.current_model_idx = (self.current_model_idx + 1) % self.models.len();
                         empty_retries = 0;
                         if self.current_model_idx == start {
-                            return Action::Complete { summary: "all models exhausted".into() };
+                            return Action::Complete {
+                                summary: "all models exhausted".into(),
+                            };
                         }
                     }
                     continue;
@@ -541,26 +634,37 @@ impl<'a> Runtime<'a> {
             .to_string()
     }
 
-
-    fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, _ctx_prefix: &str, capability_used: &mut bool) -> bool {
+    fn invoke_cap(
+        &mut self,
+        name: &str,
+        input: &str,
+        action_desc: &str,
+        _ctx_prefix: &str,
+        capability_used: &mut bool,
+    ) -> bool {
         let cap = match self.capabilities.iter().find(|c| c.name() == name) {
             Some(c) => c,
             None => {
-                self.events.push(Event::ObservationReceived(format!("error: {} capability not available", name)));
+                self.events.push(Event::ObservationReceived(format!(
+                    "error: {} capability not available",
+                    name
+                )));
                 return true;
             }
         };
 
-        let count = self.tool_call_counts.entry(name.to_string()).or_insert(0);
-        if *count >= self.max_per_tool {
-            self.events.push(Event::ObservationReceived(format!("error: {} tool call limit ({}) reached", name, self.max_per_tool)));
-            return true;
-        }
-        *count += 1;
-
         let mut retries = 0;
         const MAX_RETRIES: u32 = 3;
         loop {
+            let count = self.tool_call_counts.entry(name.to_string()).or_insert(0);
+            if *count >= self.max_per_tool {
+                self.events.push(Event::ObservationReceived(format!(
+                    "error: {} tool call limit ({}) reached",
+                    name, self.max_per_tool
+                )));
+                return true;
+            }
+            *count += 1;
             match cap.invoke(input) {
                 Ok(obs) => {
                     *capability_used = true;
@@ -570,14 +674,21 @@ impl<'a> Runtime<'a> {
                     return true;
                 }
                 Err(e) => {
-                    if classify_error(&e) == ErrorType::Transient && retries < MAX_RETRIES {
+                    if matches!(name, "read_file" | "list_dir")
+                        && classify_error(&e) == ErrorType::Transient
+                        && retries < MAX_RETRIES
+                    {
                         retries += 1;
-                        self.events.push(Event::ObservationReceived(format!("transient error (retry {}/{}): {}", retries, MAX_RETRIES, e)));
+                        self.events.push(Event::ObservationReceived(format!(
+                            "transient error (retry {}/{}): {}",
+                            retries, MAX_RETRIES, e
+                        )));
                         std::thread::sleep(Duration::from_millis(100 * retries as u64));
                         continue;
                     }
                     self.state = State::Failed;
-                    self.events.push(Event::ObservationReceived(format!("error: {}", e)));
+                    self.events
+                        .push(Event::ObservationReceived(format!("error: {}", e)));
                     return false;
                 }
             }
@@ -598,7 +709,9 @@ impl<'a> Runtime<'a> {
             if last_action.as_ref() == Some(&action) {
                 repeat_count += 1;
                 if repeat_count >= 3 {
-                    self.events.push(Event::ObservationReceived("error: action repeated 3 times, stopping".into()));
+                    self.events.push(Event::ObservationReceived(
+                        "error: action repeated 3 times, stopping".into(),
+                    ));
                     self.state = State::Failed;
                     break;
                 }
@@ -611,10 +724,14 @@ impl<'a> Runtime<'a> {
                     let desc = format!("shell {}", command);
                     if self.invoke_cap("shell", &command, &desc, "", &mut capability_used) {
                         // observation already pushed; update context
-                        let obs = self.events.last().map(|e| match e {
-                            Event::ObservationReceived(s) => s.clone(),
-                            _ => String::new(),
-                        }).unwrap_or_default();
+                        let obs = self
+                            .events
+                            .last()
+                            .map(|e| match e {
+                                Event::ObservationReceived(s) => s.clone(),
+                                _ => String::new(),
+                            })
+                            .unwrap_or_default();
                         context = format!("{}\nObservation: {}", context, obs);
                     } else {
                         break;
@@ -622,11 +739,21 @@ impl<'a> Runtime<'a> {
                 }
                 Action::ReadFile { path } => {
                     let desc = format!("read_file {}", path);
-                    if self.invoke_cap("read_file", &path, &desc, &format!("File {}:", path), &mut capability_used) {
-                        let obs = self.events.last().map(|e| match e {
-                            Event::ObservationReceived(s) => s.clone(),
-                            _ => String::new(),
-                        }).unwrap_or_default();
+                    if self.invoke_cap(
+                        "read_file",
+                        &path,
+                        &desc,
+                        &format!("File {}:", path),
+                        &mut capability_used,
+                    ) {
+                        let obs = self
+                            .events
+                            .last()
+                            .map(|e| match e {
+                                Event::ObservationReceived(s) => s.clone(),
+                                _ => String::new(),
+                            })
+                            .unwrap_or_default();
                         context = format!("{}\nFile {}:\n{}", context, path, obs);
                     } else {
                         break;
@@ -635,10 +762,15 @@ impl<'a> Runtime<'a> {
                 Action::WriteFile { path, content } => {
                     let desc = format!("write_file {}", path);
                     let input = format!("{}|{}", path, content);
+                    let events_before = self.events.len();
                     if self.invoke_cap("write_file", &input, &desc, "", &mut capability_used) {
                         // If this write matches output_file, mark for early completion
                         if let Some(out) = &self.output_file {
-                            if path.trim() == out.trim() {
+                            if path.trim() == out.trim()
+                                && self.events[events_before..]
+                                    .iter()
+                                    .any(|e| matches!(e, Event::ActionExecuted(_)))
+                            {
                                 self.output_written = true;
                             }
                         }
@@ -648,11 +780,21 @@ impl<'a> Runtime<'a> {
                 }
                 Action::ListDir { path } => {
                     let desc = format!("list_dir {}", path);
-                    if self.invoke_cap("list_dir", &path, &desc, &format!("Dir {}:", path), &mut capability_used) {
-                        let obs = self.events.last().map(|e| match e {
-                            Event::ObservationReceived(s) => s.clone(),
-                            _ => String::new(),
-                        }).unwrap_or_default();
+                    if self.invoke_cap(
+                        "list_dir",
+                        &path,
+                        &desc,
+                        &format!("Dir {}:", path),
+                        &mut capability_used,
+                    ) {
+                        let obs = self
+                            .events
+                            .last()
+                            .map(|e| match e {
+                                Event::ObservationReceived(s) => s.clone(),
+                                _ => String::new(),
+                            })
+                            .unwrap_or_default();
                         context = format!("{}\nDir {}:\n{}", context, path, obs);
                     } else {
                         break;
@@ -661,10 +803,14 @@ impl<'a> Runtime<'a> {
                 Action::Git { args } => {
                     let desc = format!("git {}", args);
                     if self.invoke_cap("git", &args, &desc, "Git output:", &mut capability_used) {
-                        let obs = self.events.last().map(|e| match e {
-                            Event::ObservationReceived(s) => s.clone(),
-                            _ => String::new(),
-                        }).unwrap_or_default();
+                        let obs = self
+                            .events
+                            .last()
+                            .map(|e| match e {
+                                Event::ObservationReceived(s) => s.clone(),
+                                _ => String::new(),
+                            })
+                            .unwrap_or_default();
                         context = format!("{}\nGit output: {}", context, obs);
                     } else {
                         break;
@@ -673,16 +819,27 @@ impl<'a> Runtime<'a> {
                 Action::Complete { summary } => {
                     // Must use at least one capability before completing
                     if !capability_used {
-                        self.events.push(Event::ObservationReceived("error: use at least one capability before completing".into()));
+                        self.events.push(Event::ObservationReceived(
+                            "error: use at least one capability before completing".into(),
+                        ));
                         continue;
                     }
-                    self.events.push(Event::ObservationReceived(summary.clone()));
+                    self.events
+                        .push(Event::ObservationReceived(summary.clone()));
                     // Post-process: write summary to output_file if set
                     if let Some(path) = &self.output_file {
                         if let Err(e) = fs::write(path, &summary) {
-                            self.events.push(Event::ObservationReceived(format!("error writing output_file: {}", e)));
+                            self.events.push(Event::ObservationReceived(format!(
+                                "error writing output_file: {}",
+                                e
+                            )));
+                            self.state = State::Failed;
+                            break;
                         } else {
-                            self.events.push(Event::ObservationReceived(format!("wrote output_file: {}", path)));
+                            self.events.push(Event::ObservationReceived(format!(
+                                "wrote output_file: {}",
+                                path
+                            )));
                         }
                     }
                     self.state = State::Completed;
@@ -690,7 +847,9 @@ impl<'a> Runtime<'a> {
                     break;
                 }
                 Action::Retry => {
-                    self.events.push(Event::ObservationReceived("error: empty response from model, retrying".into()));
+                    self.events.push(Event::ObservationReceived(
+                        "error: empty response from model, retrying".into(),
+                    ));
                     continue;
                 }
             }
@@ -714,14 +873,25 @@ fn build_model_chain(manifest: &Manifest) -> Vec<Box<dyn Model>> {
         match entry.provider.as_str() {
             "google" => chain.push(Box::new(GoogleModel::new(&entry.model, &entry.auth))),
             "anthropic" => chain.push(Box::new(AnthropicModel::new(&entry.model, &entry.auth))),
-            _ => chain.push(Box::new(CurlModel::new(&entry.endpoint, &entry.model, &entry.auth))),
+            _ => chain.push(Box::new(CurlModel::new(
+                &entry.endpoint,
+                &entry.model,
+                &entry.auth,
+            ))),
         }
     }
     if chain.is_empty() {
         match manifest.provider.as_str() {
             "google" => chain.push(Box::new(GoogleModel::new(&manifest.model, &manifest.auth))),
-            "anthropic" => chain.push(Box::new(AnthropicModel::new(&manifest.model, &manifest.auth))),
-            _ => chain.push(Box::new(CurlModel::new(&manifest.endpoint, &manifest.model, &manifest.auth))),
+            "anthropic" => chain.push(Box::new(AnthropicModel::new(
+                &manifest.model,
+                &manifest.auth,
+            ))),
+            _ => chain.push(Box::new(CurlModel::new(
+                &manifest.endpoint,
+                &manifest.model,
+                &manifest.auth,
+            ))),
         }
     }
     chain
@@ -744,7 +914,11 @@ fn main() {
     let final_state = rt.run(task);
     println!("---");
     for ev in &rt.events {
-        println!("{:?}", ev);
+        match ev {
+            Event::ActionProposed(s) => println!("ActionProposed({:?})", s),
+            Event::ActionExecuted(s) => println!("ActionExecuted({:?})", s),
+            _ => println!("{:?}", ev),
+        }
     }
     println!("---");
     println!("Final state: {:?}", final_state);
@@ -760,7 +934,9 @@ mod tests {
     struct MockModel;
     impl Model for MockModel {
         fn infer(&self, _: &str) -> Action {
-            Action::Complete { summary: "mock done".into() }
+            Action::Complete {
+                summary: "mock done".into(),
+            }
         }
     }
     #[test]
@@ -769,18 +945,29 @@ mod tests {
         impl Model for TwoStepModel {
             fn infer(&self, prompt: &str) -> Action {
                 if prompt.contains("Observation") {
-                    Action::Complete { summary: "mock done".into() }
+                    Action::Complete {
+                        summary: "mock done".into(),
+                    }
                 } else {
-                    Action::Shell { command: "echo step1".into() }
+                    Action::Shell {
+                        command: "echo step1".into(),
+                    }
                 }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(TwoStepModel)];
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 5,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test task");
@@ -792,15 +979,24 @@ mod tests {
         struct LoopForever;
         impl Model for LoopForever {
             fn infer(&self, _: &str) -> Action {
-                Action::Shell { command: "echo loop".into() }
+                Action::Shell {
+                    command: "echo loop".into(),
+                }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(LoopForever)];
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 3,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("loop");
@@ -817,8 +1013,11 @@ mod tests {
             model: "test".into(),
             endpoint: "http://localhost".into(),
             auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let rt = Runtime::new(chain, &manifest);
         assert_eq!(rt.capabilities.len(), 3);
@@ -828,15 +1027,24 @@ mod tests {
         struct RepeatModel;
         impl Model for RepeatModel {
             fn infer(&self, _: &str) -> Action {
-                Action::Shell { command: "echo same".into() }
+                Action::Shell {
+                    command: "echo same".into(),
+                }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(RepeatModel)];
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 10,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("repeat");
@@ -849,18 +1057,29 @@ mod tests {
         impl Model for EmptyModel {
             fn infer(&self, prompt: &str) -> Action {
                 if prompt.contains("Observation") {
-                    Action::Complete { summary: "done".into() }
+                    Action::Complete {
+                        summary: "done".into(),
+                    }
                 } else {
-                    Action::Shell { command: "echo step".into() }
+                    Action::Shell {
+                        command: "echo step".into(),
+                    }
                 }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(EmptyModel)];
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 5,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test empty");
@@ -873,19 +1092,30 @@ mod tests {
         impl Model for WriteModel {
             fn infer(&self, prompt: &str) -> Action {
                 if prompt.contains("Observation") {
-                    Action::Complete { summary: "report content here".into() }
+                    Action::Complete {
+                        summary: "report content here".into(),
+                    }
                 } else {
-                    Action::Shell { command: "echo hi".into() }
+                    Action::Shell {
+                        command: "echo hi".into(),
+                    }
                 }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(WriteModel)];
         let out_path = "test_output_file.txt".to_string();
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: Some(out_path.clone()),
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 5,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: Some(out_path.clone()),
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test output");
@@ -899,25 +1129,38 @@ mod tests {
         struct FailFirstModel;
         impl Model for FailFirstModel {
             fn infer(&self, _: &str) -> Action {
-                Action::Complete { summary: "gemini error: quota exceeded".into() }
+                Action::Complete {
+                    summary: "gemini error: quota exceeded".into(),
+                }
             }
         }
         struct SecondModel;
         impl Model for SecondModel {
             fn infer(&self, prompt: &str) -> Action {
                 if prompt.contains("Observation") {
-                    Action::Complete { summary: "second model done".into() }
+                    Action::Complete {
+                        summary: "second model done".into(),
+                    }
                 } else {
-                    Action::Shell { command: "echo second".into() }
+                    Action::Shell {
+                        command: "echo second".into(),
+                    }
                 }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(FailFirstModel), Box::new(SecondModel)];
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 5,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test fallback");
@@ -929,19 +1172,247 @@ mod tests {
         struct FailModel;
         impl Model for FailModel {
             fn infer(&self, _: &str) -> Action {
-                Action::Complete { summary: "model error: network".into() }
+                Action::Complete {
+                    summary: "model error: network".into(),
+                }
             }
         }
         let chain: Vec<Box<dyn Model>> = vec![Box::new(FailModel)];
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
-            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
-            provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(), max_per_tool: 5,
+            name: "t".into(),
+            capabilities: vec!["shell".into()],
+            max_iterations: 5,
+            model: "test".into(),
+            endpoint: "http://localhost".into(),
+            auth: String::new(),
+            provider: String::new(),
+            shell_backend: "sh".into(),
+            output_file: None,
+            model_chain: Vec::new(),
+            max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test exhausted");
         // When all models fail and no capability was used, the task fails
         assert_eq!(state, State::Failed);
+    }
+
+    struct CountingCap {
+        name: &'static str,
+        attempts: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        fail_until: usize,
+    }
+    impl Capability for CountingCap {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn invoke(&self, _: &str) -> Result<String, String> {
+            let attempt = self
+                .attempts
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+                + 1;
+            if attempt <= self.fail_until {
+                Err("network timeout".into())
+            } else {
+                Ok("ok".into())
+            }
+        }
+    }
+
+    fn test_manifest() -> Manifest {
+        serde_yaml::from_str(
+            "name: test\ncapabilities: [read_file, write_file]\nmax_iterations: 10",
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn transient_reads_and_listings_retry_until_success() {
+        for name in ["read_file", "list_dir"] {
+            let manifest = test_manifest();
+            let mut rt = Runtime::new(vec![Box::new(MockModel)], &manifest);
+            let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            rt.capabilities = vec![Box::new(CountingCap {
+                name,
+                attempts: attempts.clone(),
+                fail_until: 2,
+            })];
+            let mut used = false;
+            assert!(rt.invoke_cap(name, "file", name, "", &mut used));
+            assert!(used);
+            assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 3);
+            assert_eq!(rt.tool_call_counts[name], 3);
+        }
+    }
+
+    #[test]
+    fn retries_respect_physical_tool_limit() {
+        let mut manifest = test_manifest();
+        manifest.max_per_tool = 2;
+        let mut rt = Runtime::new(vec![Box::new(MockModel)], &manifest);
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        rt.capabilities = vec![Box::new(CountingCap {
+            name: "read_file",
+            attempts: attempts.clone(),
+            fail_until: usize::MAX,
+        })];
+        let mut used = false;
+        assert!(rt.invoke_cap("read_file", "file", "read_file file", "", &mut used));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert_eq!(rt.tool_call_counts["read_file"], 2);
+        assert!(
+            matches!(rt.events.last(), Some(Event::ObservationReceived(s)) if s.contains("tool call limit (2) reached"))
+        );
+        assert_eq!(rt.state, State::Running);
+    }
+
+    #[test]
+    fn transient_mutations_are_not_retried() {
+        for name in ["write_file", "shell", "git"] {
+            let manifest = test_manifest();
+            let mut rt = Runtime::new(vec![Box::new(MockModel)], &manifest);
+            let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            rt.capabilities = vec![Box::new(CountingCap {
+                name,
+                attempts: attempts.clone(),
+                fail_until: 1,
+            })];
+            let mut used = false;
+            assert!(
+                !rt.invoke_cap(name, "input", name, "", &mut used),
+                "{}",
+                name
+            );
+            assert_eq!(
+                attempts.load(std::sync::atomic::Ordering::SeqCst),
+                1,
+                "{}",
+                name
+            );
+            assert_eq!(rt.state, State::Failed);
+        }
+    }
+
+    #[test]
+    fn tool_limit_is_per_tool_and_returns_observation() {
+        let mut manifest = test_manifest();
+        assert_eq!(manifest.max_per_tool, 5);
+        manifest.max_per_tool = 1;
+        let mut rt = Runtime::new(vec![Box::new(MockModel)], &manifest);
+        let reads = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let writes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        rt.capabilities = vec![
+            Box::new(CountingCap {
+                name: "read_file",
+                attempts: reads.clone(),
+                fail_until: 0,
+            }),
+            Box::new(CountingCap {
+                name: "write_file",
+                attempts: writes.clone(),
+                fail_until: 0,
+            }),
+        ];
+        let mut used = false;
+        assert!(rt.invoke_cap("read_file", "a", "read_file a", "", &mut used));
+        assert!(rt.invoke_cap("read_file", "b", "read_file b", "", &mut used));
+        assert!(rt.invoke_cap("write_file", "b|c", "write_file b", "", &mut used));
+        assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(matches!(rt.events.last(), Some(Event::ObservationReceived(s)) if s == "ok"));
+        assert!(rt.events.iter().any(|e| matches!(e, Event::ObservationReceived(s) if s.contains("read_file tool call limit (1) reached"))));
+        assert_eq!(rt.state, State::Running);
+    }
+
+    #[test]
+    fn failed_summary_output_write_does_not_complete() {
+        struct CompleteAfterRead;
+        impl Model for CompleteAfterRead {
+            fn infer(&self, prompt: &str) -> Action {
+                if prompt.contains("File Cargo.toml:") {
+                    Action::Complete {
+                        summary: "done".into(),
+                    }
+                } else {
+                    Action::ReadFile {
+                        path: "Cargo.toml".into(),
+                    }
+                }
+            }
+        }
+        let mut manifest = test_manifest();
+        manifest.output_file = Some(format!(
+            "mote-nonexistent-output-{}/report.txt",
+            std::process::id()
+        ));
+        let mut rt = Runtime::new(vec![Box::new(CompleteAfterRead)], &manifest);
+        assert_eq!(rt.run("read and report"), State::Failed);
+        assert!(rt.events.iter().any(|e| matches!(e, Event::ObservationReceived(s) if s.contains("error writing output_file"))));
+        assert!(!rt.events.iter().any(|e| matches!(e, Event::RunCompleted)));
+    }
+
+    #[test]
+    fn rejected_output_write_does_not_complete() {
+        struct WriteModel(String);
+        impl Model for WriteModel {
+            fn infer(&self, _: &str) -> Action {
+                Action::WriteFile {
+                    path: self.0.clone(),
+                    content: "data".into(),
+                }
+            }
+        }
+        let path = format!("mote-never-created-{}/report.txt", std::process::id());
+        let mut manifest = test_manifest();
+        manifest.output_file = Some(path.clone());
+        manifest.max_per_tool = 0;
+        let mut rt = Runtime::new(vec![Box::new(WriteModel(path.clone()))], &manifest);
+        assert_eq!(rt.run("write report"), State::Failed);
+        assert!(!rt.output_written);
+        assert!(!std::path::Path::new(&path).exists());
+    }
+
+    #[test]
+    fn classifier_distinguishes_transient_and_permanent_errors() {
+        assert_eq!(classify_error("permission denied"), ErrorType::Permanent);
+        assert_eq!(classify_error("network timeout"), ErrorType::Transient);
+    }
+
+    #[test]
+    fn permanent_read_error_is_not_retried() {
+        struct DeniedCap(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+        impl Capability for DeniedCap {
+            fn name(&self) -> &str {
+                "read_file"
+            }
+            fn invoke(&self, _: &str) -> Result<String, String> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err("permission denied".into())
+            }
+        }
+        let manifest = test_manifest();
+        let mut rt = Runtime::new(vec![Box::new(MockModel)], &manifest);
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        rt.capabilities = vec![Box::new(DeniedCap(attempts.clone()))];
+        let mut used = false;
+        assert!(!rt.invoke_cap("read_file", "file", "read_file file", "", &mut used));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(rt.state, State::Failed);
+    }
+
+    #[test]
+    fn transient_read_stops_after_three_retries() {
+        let manifest = test_manifest();
+        let mut rt = Runtime::new(vec![Box::new(MockModel)], &manifest);
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        rt.capabilities = vec![Box::new(CountingCap {
+            name: "read_file",
+            attempts: attempts.clone(),
+            fail_until: usize::MAX,
+        })];
+        let mut used = false;
+        assert!(!rt.invoke_cap("read_file", "file", "read_file file", "", &mut used));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 4);
+        assert_eq!(rt.state, State::Failed);
     }
 }
