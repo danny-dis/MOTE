@@ -252,7 +252,14 @@ impl ShellExecutor {
                 .map_err(|_| "stderr reader failed".to_owned())?,
         );
         bytes.truncate(self.max_output);
-        let text = String::from_utf8_lossy(&bytes).into_owned();
+        let mut text = String::from_utf8_lossy(&bytes).into_owned();
+        if text.len() > self.max_output {
+            let mut end = self.max_output;
+            while !text.is_char_boundary(end) {
+                end -= 1;
+            }
+            text.truncate(end);
+        }
         if status.success() {
             Ok(text)
         } else {
@@ -296,22 +303,84 @@ fn retry_read(
     unreachable!()
 }
 
+type ToolHandler = dyn Fn(&serde_json::Value) -> Result<String, String> + Send + Sync;
+
+/// Host-owned synchronous handler. The host is responsible for isolating the
+/// handler and bounding its own blocking work; MOTE checks the run deadline
+/// again after it returns.
+pub struct CustomTool {
+    pub name: String,
+    handler: Box<ToolHandler>,
+}
+
+impl CustomTool {
+    pub fn new(
+        name: impl Into<String>,
+        handler: impl Fn(&serde_json::Value) -> Result<String, String> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            handler: Box::new(handler),
+        }
+    }
+}
+
 pub struct Runtime {
     pub registry: CapabilityRegistry,
     pub workspace: WorkspaceFs,
     pub events: Vec<Event>,
     pub max_iterations: usize,
     pub max_per_tool: usize,
+    pub max_output_bytes: usize,
     pub max_runtime: Duration,
     pub cancellation: CancellationToken,
     pub decision: Option<Box<dyn DecisionProvider>>,
     pub decision_fallback: Option<String>,
     pub shell: Option<ShellExecutor>,
     pub output_file: Option<std::path::PathBuf>,
+    tools: std::collections::BTreeMap<String, CustomTool>,
 }
 impl Runtime {
     pub fn new(manifest: &Manifest, workspace: WorkspaceFs) -> Result<Self, String> {
-        let registry = CapabilityRegistry::from_names(&manifest.capabilities)
+        Self::with_tools(manifest, workspace, vec![])
+    }
+
+    /// Registration supplies executable code, never permission: the manifest
+    /// must separately grant each registered tool's capability name.
+    pub fn with_tools(
+        manifest: &Manifest,
+        workspace: WorkspaceFs,
+        tools: Vec<CustomTool>,
+    ) -> Result<Self, String> {
+        if !(1..=1_048_576).contains(&manifest.max_output_bytes) {
+            return Err("max_output_bytes must be between 1 and 1048576".to_owned());
+        }
+        let mut registered = std::collections::BTreeMap::new();
+        for tool in tools {
+            let name = tool.name.clone();
+            if name.is_empty()
+                || !name
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+                || matches!(
+                    name.as_str(),
+                    "shell"
+                        | "read_file"
+                        | "write_file"
+                        | "list_dir"
+                        | "git"
+                        | "decision"
+                        | "complete"
+                )
+            {
+                return Err(format!("invalid or reserved custom tool name: {name}"));
+            }
+            if registered.insert(name.clone(), tool).is_some() {
+                return Err(format!("duplicate custom tool: {name}"));
+            }
+        }
+        let names = registered.keys().cloned().collect();
+        let registry = CapabilityRegistry::from_names_with_tools(&manifest.capabilities, &names)
             .map_err(|error| error.to_string())?;
         if registry.allows("git") && !registry.allows("shell") {
             return Err("git capability requires shell capability".to_owned());
@@ -356,6 +425,7 @@ impl Runtime {
             events: vec![Event::RunStarted],
             max_iterations: manifest.max_iterations,
             max_per_tool: manifest.max_per_tool,
+            max_output_bytes: manifest.max_output_bytes,
             max_runtime: Duration::from_secs(manifest.max_runtime_seconds),
             cancellation: CancellationToken::default(),
             decision,
@@ -365,6 +435,7 @@ impl Runtime {
                 .and_then(|config| config.fallback.clone()),
             shell,
             output_file: manifest.output_file.clone(),
+            tools: registered,
         })
     }
 
@@ -411,6 +482,22 @@ impl Runtime {
             Action::ListDir { .. } => "list_dir",
             Action::Git { .. } => "git",
             Action::Decision { .. } => "decision",
+            Action::Custom { name, input } => {
+                if !input.is_object() {
+                    return Err("custom tool input must be a JSON object".to_owned());
+                }
+                if serde_json::to_vec(input)
+                    .map_err(|_| "custom tool input cannot be encoded")?
+                    .len()
+                    > 1_048_576
+                {
+                    return Err("custom tool input exceeds 1048576 bytes".to_owned());
+                }
+                if !self.tools.contains_key(name) {
+                    return Err(format!("custom tool not registered: {name}"));
+                }
+                name
+            }
             Action::Complete { .. } => return Ok(()),
         };
         if self.registry.allows(cap) {
@@ -426,7 +513,7 @@ impl Runtime {
         let mut previous: Option<Action> = None;
         let mut repeats = 0_usize;
         let mut capability_used = false;
-        let mut tool_counts = std::collections::HashMap::<&'static str, usize>::new();
+        let mut tool_counts = std::collections::HashMap::<String, usize>::new();
 
         'run: for _iteration in 0..self.max_iterations {
             if self.cancellation.is_cancelled() {
@@ -478,19 +565,24 @@ impl Runtime {
                 return State::Failed;
             }
             self.events.push(Event::ActionProposed {
-                action: format!("{action:?}"),
+                action: match &action {
+                    Action::WriteFile { path, .. } => format!("WriteFile {{ path: {path:?} }}"),
+                    Action::Custom { name, .. } => format!("Custom {{ name: {name:?} }}"),
+                    _ => format!("{action:?}"),
+                },
             });
             let capability_name = match &action {
-                Action::Shell { .. } => Some("shell"),
-                Action::ReadFile { .. } => Some("read_file"),
-                Action::WriteFile { .. } => Some("write_file"),
-                Action::ListDir { .. } => Some("list_dir"),
-                Action::Git { .. } => Some("git"),
-                Action::Decision { .. } => Some("decision"),
+                Action::Shell { .. } => Some("shell".to_owned()),
+                Action::ReadFile { .. } => Some("read_file".to_owned()),
+                Action::WriteFile { .. } => Some("write_file".to_owned()),
+                Action::ListDir { .. } => Some("list_dir".to_owned()),
+                Action::Git { .. } => Some("git".to_owned()),
+                Action::Decision { .. } => Some("decision".to_owned()),
+                Action::Custom { name, .. } => Some(name.clone()),
                 Action::Complete { .. } => None,
             };
             if let Some(name) = capability_name {
-                let count = tool_counts.entry(name).or_default();
+                let count = tool_counts.entry(name.clone()).or_default();
                 if *count >= self.max_per_tool {
                     let observation = format!(
                         "error: {name} tool call limit ({}) reached",
@@ -503,7 +595,7 @@ impl Runtime {
                     context.push_str(&observation);
                     continue;
                 }
-                if !matches!(name, "read_file" | "list_dir") {
+                if !matches!(name.as_str(), "read_file" | "list_dir") {
                     *count += 1;
                 }
             }
@@ -536,7 +628,7 @@ impl Runtime {
                     match retry_read(
                         || {
                             self.workspace
-                                .read(&path)
+                                .read_limited(&path, self.max_output_bytes)
                                 .map_err(|error| error.to_string())
                         },
                         count,
@@ -597,7 +689,7 @@ impl Runtime {
                     match retry_read(
                         || {
                             self.workspace
-                                .list(&path)
+                                .list_limited(&path, self.max_output_bytes)
                                 .map(|entries| entries.join("\n"))
                                 .map_err(|error| error.to_string())
                         },
@@ -650,6 +742,33 @@ impl Runtime {
                     let observation = serde_json::to_string(&result)
                         .unwrap_or_else(|_| "decision serialization failed".to_owned());
                     ("decision", observation)
+                }
+                Action::Custom { name, input } => {
+                    let tool = self.tools.get(&name).expect("validated tool");
+                    let result = (tool.handler)(&input);
+                    if self.cancellation.is_cancelled() {
+                        self.events.push(Event::RunCompleted {
+                            state: "cancelled".to_owned(),
+                        });
+                        return State::Cancelled;
+                    }
+                    match result {
+                        Ok(output) if output.len() <= self.max_output_bytes => {
+                            (tool.name.as_str(), output)
+                        }
+                        Ok(_) => {
+                            self.events.push(Event::Error {
+                                message: "custom tool output exceeds max_output_bytes".to_owned(),
+                            });
+                            return State::Failed;
+                        }
+                        Err(_) => {
+                            self.events.push(Event::Error {
+                                message: format!("custom tool failed: {name}"),
+                            });
+                            return State::Failed;
+                        }
+                    }
                 }
                 Action::Complete { summary } => {
                     if !capability_used {
@@ -742,6 +861,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn shell_observation_cap_holds_after_invalid_utf8_replacement() {
+        if Command::new("python").arg("--version").output().is_err() {
+            return;
+        }
+        let executor = ShellExecutor {
+            workspace: std::env::current_dir().unwrap(),
+            allowed: ["python".to_owned()].into_iter().collect(),
+            timeout: Duration::from_secs(5),
+            max_output: 1,
+            unsafe_shell: false,
+        };
+        let output = executor
+            .run(
+                "python -c \"__import__('sys').stdout.buffer.write(bytes([255]))\"",
+                &CancellationToken::default(),
+            )
+            .unwrap();
+        assert!(output.len() <= 1, "encoded observation exceeded byte cap");
+    }
+
     #[cfg(unix)]
     #[test]
     fn shell_timeout_does_not_wait_for_descendant_pipe_handles() {
@@ -757,6 +897,101 @@ mod tests {
             .run("sh -c 'sleep 2 & wait'", &CancellationToken::default())
             .is_err());
         assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn write_action_does_not_log_file_content() {
+        let root = std::env::temp_dir().join(format!("mote-write-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let manifest = Manifest::from_yaml("name: private\ncapabilities: [write_file]\n").unwrap();
+        let workspace = WorkspaceFs::new(&root).unwrap();
+        let mut runtime = Runtime::new(&manifest, workspace).unwrap();
+        let state = runtime.run_actions(&[
+            Action::WriteFile {
+                path: "report.txt".into(),
+                content: "SECRET-WRITE-CONTENT".into(),
+            },
+            Action::Complete {
+                summary: "done".into(),
+            },
+        ]);
+        assert_eq!(state, State::Completed);
+        assert_eq!(
+            std::fs::read_to_string(root.join("report.txt")).unwrap(),
+            "SECRET-WRITE-CONTENT"
+        );
+        assert!(!runtime.events.iter().any(|event| matches!(event,
+            Event::ActionProposed { action } if action.contains("SECRET-WRITE-CONTENT"))));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn runtime_rejects_unbounded_observation_limit() {
+        for limit in [0, 1_048_577] {
+            let manifest = Manifest::from_yaml(&format!(
+                "name: invalid\ncapabilities: [read_file]\nmax_output_bytes: {limit}\n"
+            ))
+            .unwrap();
+            let workspace = WorkspaceFs::new(std::env::current_dir().unwrap()).unwrap();
+            assert!(Runtime::new(&manifest, workspace)
+                .err()
+                .unwrap()
+                .contains("max_output_bytes"));
+        }
+    }
+
+    #[test]
+    fn oversized_file_is_rejected_before_reaching_model_context_or_events() {
+        let root = std::env::temp_dir().join(format!("mote-read-limit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("large.txt"), "SENSITIVE-CONTENT".repeat(100)).unwrap();
+        let manifest =
+            Manifest::from_yaml("name: bounded\ncapabilities: [read_file]\nmax_output_bytes: 16\n")
+                .unwrap();
+        let workspace = WorkspaceFs::new(&root).unwrap();
+        let mut runtime = Runtime::new(&manifest, workspace).unwrap();
+        let state = runtime.run_actions(&[
+            Action::ReadFile {
+                path: "large.txt".into(),
+            },
+            Action::Complete {
+                summary: "done".into(),
+            },
+        ]);
+        assert_eq!(state, State::Failed);
+        assert!(runtime.events.iter().any(|event| matches!(event,
+            Event::Error { message } if message.contains("exceeds max_output_bytes"))));
+        assert!(!runtime.events.iter().any(|event| matches!(event,
+            Event::ObservationReceived { text } if text.contains("SENSITIVE-CONTENT"))));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn oversized_directory_listing_is_rejected_before_observation() {
+        let root = std::env::temp_dir().join(format!("mote-list-limit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("SENSITIVE-A.txt"), "a").unwrap();
+        std::fs::write(root.join("SENSITIVE-B.txt"), "b").unwrap();
+        let manifest =
+            Manifest::from_yaml("name: bounded\ncapabilities: [list_dir]\nmax_output_bytes: 20\n")
+                .unwrap();
+        let workspace = WorkspaceFs::new(&root).unwrap();
+        let mut runtime = Runtime::new(&manifest, workspace).unwrap();
+        let state = runtime.run_actions(&[
+            Action::ListDir { path: ".".into() },
+            Action::Complete {
+                summary: "done".into(),
+            },
+        ]);
+        assert_eq!(state, State::Failed);
+        assert!(runtime.events.iter().any(|event| matches!(event,
+            Event::Error { message } if message.contains("exceeds max_output_bytes"))));
+        assert!(!runtime.events.iter().any(|event| matches!(event,
+            Event::ObservationReceived { text } if text.contains("SENSITIVE-A"))));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -25,12 +25,20 @@ pub struct CapabilityRegistry {
 
 impl CapabilityRegistry {
     pub fn from_names(names: &[impl AsRef<str>]) -> Result<Self, UnknownCapability> {
+        Self::from_names_with_tools(names, &BTreeSet::new())
+    }
+
+    pub(crate) fn from_names_with_tools(
+        names: &[impl AsRef<str>],
+        tools: &BTreeSet<String>,
+    ) -> Result<Self, UnknownCapability> {
         let mut validated = BTreeSet::new();
         for name in names.iter().map(AsRef::as_ref) {
             if !matches!(
                 name,
                 "shell" | "read_file" | "write_file" | "list_dir" | "git" | "decision"
-            ) {
+            ) && !tools.contains(name)
+            {
                 return Err(UnknownCapability(name.to_owned()));
             }
             validated.insert(name.to_owned());
@@ -117,6 +125,18 @@ impl WorkspaceFs {
         fs::read_to_string(self.resolve(path, false)?)
     }
 
+    pub fn read_limited(&self, path: impl AsRef<Path>, limit: usize) -> io::Result<String> {
+        use std::io::Read;
+        let file = fs::File::open(self.resolve(path, false)?)?;
+        let mut bytes = Vec::new();
+        file.take((limit as u64).saturating_add(1))
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > limit {
+            return Err(io::Error::other("file exceeds max_output_bytes"));
+        }
+        String::from_utf8(bytes).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+    }
+
     pub fn write(&self, path: impl AsRef<Path>, content: &str) -> io::Result<()> {
         fs::write(self.resolve(path, true)?, content)
     }
@@ -135,5 +155,21 @@ impl WorkspaceFs {
         fs::read_dir(self.resolve(path, false)?)?
             .map(|entry| entry.map(|e| e.file_name().to_string_lossy().into_owned()))
             .collect()
+    }
+
+    pub fn list_limited(&self, path: impl AsRef<Path>, limit: usize) -> io::Result<Vec<String>> {
+        let mut names: Vec<String> = Vec::new();
+        let mut bytes = 0_usize;
+        for entry in fs::read_dir(self.resolve(path, false)?)? {
+            let name = entry?.file_name().to_string_lossy().into_owned();
+            bytes = bytes.saturating_add(name.len() + usize::from(!names.is_empty()));
+            if bytes > limit {
+                return Err(io::Error::other(
+                    "directory listing exceeds max_output_bytes",
+                ));
+            }
+            names.push(name);
+        }
+        Ok(names)
     }
 }

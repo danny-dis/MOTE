@@ -2,7 +2,7 @@
 
 **Minimal Orchestration & Task Execution**
 
-MOTE is a lightweight, model-agnostic agent runtime designed to embody an agent specification and execute tasks with the smallest practical control loop. It is intentionally independent of GLUE, ATHENA, Ghost Factory, DANNY, and any particular model provider.
+MOTE is a lightweight, model-agnostic Rust library and CLI for building trusted-workspace agents. It keeps the execution loop small and leaves scheduling, memory, user interfaces, and workload isolation to the application that embeds it. It is intentionally independent of GLUE, ATHENA, Ghost Factory, DANNY, and any particular model provider.
 
 ## Why MOTE?
 
@@ -55,7 +55,7 @@ LOAD -> THINK -> ACT -> OBSERVE -> REPEAT -> COMPLETE
 - **Environment agnostic** — run locally, in containers, microVMs, remote workers, or other execution environments.
 - **Composable** — use MOTE alone or as a worker primitive inside larger systems.
 - **Observable** — every important action should be representable as structured events.
-- **Safe by default** — permissions and execution boundaries belong to the environment/capability layer, not to model instructions alone.
+- **Scoped by default** — no capability is granted implicitly; process isolation and host authorization remain the embedding application's responsibility.
 
 ## Agent specification
 
@@ -85,6 +85,17 @@ Maintain this repository and keep changes aligned with its engineering standards
 ```
 
 The current CLI reads YAML manifests. `AGENT.md` and external authorization/policy integration remain design goals, not implemented security controls.
+
+## Building on MOTE
+
+MOTE exposes a Rust library: implement the `Model` trait to supply actions, configure a `Manifest`, then run `Runtime` in a `WorkspaceFs`. The Cargo package is named `mote-agent` (the unrelated `mote` package on crates.io is **not** this project); its Rust library import remains `mote`. The runnable examples work without a model account:
+
+```bash
+cargo run --locked --example basic_agent
+cargo run --locked --example custom_tool
+```
+
+The [custom-tool example](examples/custom_tool.rs) registers a host-owned Rust handler with `Runtime::with_tools` and grants it by name in the manifest. It accepts a JSON-object input and returns a bounded text observation; unknown and ungranted names are rejected. For HTTP models, the host must describe registered tools in the task; action-line syntax is `custom: name | {"key":"value"}`. Registration does not itself grant permission. A YAML file alone cannot load executable Rust handlers. There is no dynamic plug-in ABI or tool sandbox; handlers run in the embedding process and must bound their own blocking work.
 
 ## Extensibility
 
@@ -140,7 +151,7 @@ Those capabilities may be integrated externally when useful.
 
 ## Status and quick start
 
-MOTE 0.12.1 contains a Rust library (`src/lib.rs`) and CLI (`src/main.rs`). A YAML manifest selects the model chain, workspace, limits, and explicit capabilities. The current actions are `shell`, `read_file`, `write_file`, `list_dir`, `git`, `decision`, and `complete`. A task must use at least one permitted capability before completion. `max_per_tool` defaults to 5 physical calls per capability (including retries); transient read/list failures may retry up to three times with backoff. Shell, Git, and writes are never auto-retried. A successful explicit write to the configured `output_file` ends the run; a summary cannot claim success by reusing an old report.
+MOTE 0.13.0 (`mote-agent` Cargo package) contains a Rust library (`src/lib.rs`, imported as `mote`) and CLI (`src/main.rs`). A YAML manifest selects the model chain, workspace, limits, and explicit capabilities. The built-in actions are `shell`, `read_file`, `write_file`, `list_dir`, `git`, `decision`, and `complete`; Rust embedders can additionally register host-owned custom handlers with explicit manifest grants. A task must use at least one permitted capability before completion. `max_per_tool` defaults to 5 physical calls per capability (including retries); transient read/list failures may retry up to three times with backoff. Shell, Git, and writes are never auto-retried. A successful explicit write to the configured `output_file` ends the run; a summary cannot claim success by reusing an old report.
 
 ```bash
 cargo build --release
@@ -148,10 +159,16 @@ cargo build --release
 ./target/release/mote --jsonl specs/dmr-x-local.yaml "Describe the workspace"
 ```
 
-`--jsonl` emits structured lifecycle events. Model credentials are read from the environment variable named by a manifest's `auth_env`, never stored in example YAML. See `specs/` for examples and `docs/STATUS.md` for implementation status. For a local endpoint without credentials, `specs/keyless-local.yaml` is a parser-tested example; a working server is still required. The Pollinations example sends workspace observations to a third-party endpoint and has not been live-verified. On decision-provider failure, runtime fallback is available only for a choice keyed `deny`, `reject`, `block`, or `escalate` that appears in the request criteria; score and Noul requests fail rather than receiving an invented zero. The caller must treat those keys as denying actions, not aliases for approval.
+`--jsonl` prints structured lifecycle events after the run, not an incremental live stream. Model credentials are read from the environment variable named by a manifest's `auth_env`, never stored in example YAML. See `specs/` for examples and `docs/STATUS.md` for implementation status. For a local endpoint without credentials, `specs/keyless-local.yaml` is a parser-tested example; a working server is still required. The Pollinations example sends workspace observations to a third-party endpoint and has not been live-verified. On decision-provider failure, runtime fallback is available only for a choice keyed `deny`, `reject`, `block`, or `escalate` that appears in the request criteria; score and Noul requests fail rather than receiving an invented zero. The caller must treat those keys as denying actions, not aliases for approval.
 
-**Security boundary:** capabilities are deny-by-default and built-in file actions check workspace paths, but shell and Git launch normal OS processes with the invoking user's permissions. An executable allowlist and timeout are **not an OS sandbox**: permitted programs and their arguments may access files, network, subprocesses, and secrets outside the workspace. Use an externally isolated account/container/VM for untrusted model output or repositories; do not treat the manifest as authorization on its own. Cancellation and time limits are best-effort rather than a guarantee against child processes or blocked network calls. JSONL events include raw actions and observations, and observations are sent to the configured model endpoint; do not point MOTE at sensitive workspaces or share its event logs without review.
+**Security boundary:** capabilities are deny-by-default and built-in file actions check workspace paths, but shell and Git launch normal OS processes with the invoking user's permissions. An executable allowlist and timeout are **not an OS sandbox**: permitted programs and their arguments may access files, network, subprocesses, and secrets outside the workspace. Use an externally isolated account/container/VM for untrusted model output or repositories; do not treat the manifest as authorization on its own. Cancellation and time limits are best-effort rather than a guarantee against child processes or blocked network calls. JSONL events include observations and most action arguments (write-file content is omitted), and observations are sent to the configured model endpoint; do not point MOTE at sensitive workspaces or share its event logs without review. See the [deployment security checklist](SECURITY.md).
+
+## Production deployment boundary
+
+MOTE is a **library/CLI kernel**, not a hosted agent service or security sandbox. A supported deployment uses a trusted operator-controlled manifest and runs each agent under a dedicated low-privilege identity or external container/VM with constrained filesystem, environment, and network access. The host must decide which manifests, capabilities, model endpoints, and Rust tool handlers are allowed; loading a user-submitted manifest does **not** authorize its requests. Use the [security checklist](SECURITY.md) before unattended runs. Multi-tenant execution of arbitrary user agents on a shared host is outside this release scope.
+
+The embedding application owns scheduling, persistence, user authentication, credential storage, monitoring, and restart/retry policy. MOTE provides bounded individual runs and events, not a durable job queue. Exercise the real model endpoint and the target OS/environment before promoting an agent to production; the keyless example and CI do not test a provider's availability. This pre-1.0 Rust API may change in a minor release; pin a compatible crate version and test upgrades.
 
 ## License
 
-No license has been selected. All rights are reserved unless the owner grants permission separately.
+MIT. See [LICENSE](LICENSE). You may build and distribute agents on top of MOTE under the terms of that license. Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md) when distributing a bundled binary.

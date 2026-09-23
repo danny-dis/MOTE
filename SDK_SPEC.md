@@ -21,7 +21,7 @@ Primary goals:
 - Build an agent without modifying the MOTE runtime.
 - Keep the core runtime minimal.
 - Make the public API stable and versioned.
-- Permit proprietary MOTE runtime + independently licensed open-source agents.
+- Permit third-party agents under independently chosen licenses while MOTE itself remains MIT-licensed.
 - Support local-first and remote model/tool execution.
 - Support deterministic tools and model-driven reasoning without forcing either into the core.
 - Permit specialized agents such as coding, code review, research, benchmarking, security, data, and domain agents.
@@ -408,27 +408,17 @@ MOTE + shell + git + code tools = MOTE Coding Agent
 
 ## 14. Distribution and Licensing Boundary
 
-The SDK MUST be designed so that an application can be distributed independently from the MOTE runtime implementation.
-
-Target model:
+MOTE itself is licensed under MIT; see [LICENSE](LICENSE). Third-party applications and agents may be distributed under licenses of their authors' choice, subject to MOTE's MIT notice and their own dependency terms. An SDK boundary is still a design target, not an implemented stable plug-in API.
 
 ```text
-Proprietary MOTE Runtime
+MIT-licensed MOTE runtime and Rust library
         |
-   Public SDK/API
+   Public Rust API (pre-1.0, evolving)
         |
-  Third-party agents
-        |
-  Independent licenses
+  Third-party agents with independent licenses
 ```
 
-MOTE's commercial/proprietary terms MUST explicitly define permitted application development and redistribution rights.
-
-The intended architecture allows an open-source agent to depend on MOTE without requiring the MOTE runtime source code to become open source.
-
-This is a product/legal requirement as well as an architectural requirement: the SDK boundary MUST be clear enough that application code is separable from proprietary implementation details.
-
-Final licensing language MUST be reviewed by qualified legal counsel.
+An application should be able to depend on the public Rust library without relying on MOTE's private implementation details. This is an API design goal, not a separate commercial licensing scheme. Consult qualified legal counsel for a particular distribution's license obligations.
 
 ---
 
@@ -573,7 +563,7 @@ These MUST remain true as MOTE evolves:
 8. Runtime enforces permissions.
 9. Events provide observability.
 10. The SDK is the compatibility boundary.
-11. Proprietary runtime implementation details are not part of the public contract.
+11. Internal implementation details are not part of the public contract.
 12. A serious agent must be possible without turning MOTE into a specialized platform.
 
 ---

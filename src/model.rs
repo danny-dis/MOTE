@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::str::FromStr;
 use std::time::Duration;
 
-const SYSTEM_PROMPT: &str = "You are MOTE. Respond with exactly one action line: shell: <command>, read_file: <path>, write_file: <path> | <content>, list_dir: <path>, git: <args>, decision: <json>, or complete: <summary>. Choose the single simplest permitted action.";
+const SYSTEM_PROMPT: &str = "You are MOTE. Respond with exactly one action line: shell: <command>, read_file: <path>, write_file: <path> | <content>, list_dir: <path>, git: <args>, decision: <json>, custom: <registered-name> | <JSON object>, or complete: <summary>. Use custom only when the task names a host-registered, granted tool. Choose the single simplest permitted action.";
 
 pub trait Model: Send + Sync {
     fn infer(&self, prompt: &str) -> Result<Action, String>;
@@ -238,6 +238,24 @@ pub fn parse_action(content: &str) -> Result<Action, String> {
         "decision" => serde_json::from_str(rest)
             .map(|request| Action::Decision { request })
             .map_err(|error| format!("invalid decision action: {error}")),
+        "custom" => {
+            let (name, input) = rest
+                .split_once('|')
+                .ok_or("custom requires: name | JSON object")?;
+            let name = name.trim();
+            if name.is_empty() {
+                return Err("custom tool name is empty".to_owned());
+            }
+            let input: Value = serde_json::from_str(input.trim())
+                .map_err(|error| format!("invalid custom tool input: {error}"))?;
+            if !input.is_object() {
+                return Err("custom tool input must be a JSON object".to_owned());
+            }
+            Ok(Action::Custom {
+                name: name.to_owned(),
+                input,
+            })
+        }
         _ => Err("unknown action".to_owned()),
     }
 }
@@ -248,6 +266,20 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
+
+    #[test]
+    fn custom_action_parses_name_and_json_object() {
+        assert_eq!(
+            parse_action("custom: lookup | {\"query\":\"status\"}").unwrap(),
+            Action::Custom {
+                name: "lookup".into(),
+                input: json!({"query":"status"}),
+            }
+        );
+        assert!(parse_action("custom: lookup | [1,2]").is_err());
+        assert!(parse_action("custom: lookup | not-json").is_err());
+        assert!(parse_action("custom: | {}").is_err());
+    }
 
     fn chunked_server(body: String, status: u16) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();

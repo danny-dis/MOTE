@@ -23,16 +23,27 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Build
-        run: cargo build --release
+        run: cargo build --locked --release
 
       - name: Test
-        run: cargo test --all-targets
+        run: cargo test --locked --all-targets
+      - name: Test release build
+        run: cargo test --locked --release --all-targets
+      - name: Example agent
+        run: cargo run --locked --example basic_agent
+      - name: Custom-tool example
+        run: cargo run --locked --example custom_tool
+      - name: Verify distributable package
+        if: runner.os == 'Linux'
+        run: cargo package --locked
+      - name: Verify public API docs
+        run: cargo doc --locked --no-deps
 
       - name: Format
         run: cargo fmt --check
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
 
   security-audit:
     runs-on: ubuntu-latest
