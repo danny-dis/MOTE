@@ -1,6 +1,8 @@
+use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
 use std::process::Stdio;
+use std::time::Duration;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -20,6 +22,8 @@ struct Manifest {
     capabilities: Vec<String>,
     #[serde(default = "default_max_iters")]
     max_iterations: usize,
+    #[serde(default = "default_max_per_tool")]
+    max_per_tool: usize,
     #[serde(default = "default_model")]
     model: String,
     #[serde(default = "default_endpoint")]
@@ -39,9 +43,28 @@ struct Manifest {
 fn default_provider() -> String { "openai".into() }
 fn default_shell_backend() -> String { "auto".into() }
 fn default_max_iters() -> usize { 20 }
+fn default_max_per_tool() -> usize { 5 }
 fn default_model() -> String { "groq/compound-mini".into() }
 fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
 fn default_auth() -> String { String::new() }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ErrorType { Transient, Permanent }
+
+fn classify_error(msg: &str) -> ErrorType {
+    let lower = msg.to_lowercase();
+    if lower.contains("timeout")
+        || lower.contains("network")
+        || lower.contains("reset")
+        || lower.contains("unreachable")
+        || lower.contains("refused")
+        || lower.contains("timed out")
+    {
+        ErrorType::Transient
+    } else {
+        ErrorType::Permanent
+    }
+}
 
 const MOTE_SYSTEM_PROMPT: &str = "\
 You are MOTE. Use the available capabilities to gather information, then complete.
@@ -443,6 +466,8 @@ struct Runtime<'a> {
     output_file: Option<String>,
     current_model_idx: usize,
     output_written: bool,
+    max_per_tool: usize,
+    tool_call_counts: HashMap<String, usize>,
 }
 
 impl<'a> Runtime<'a> {
@@ -470,6 +495,8 @@ impl<'a> Runtime<'a> {
             output_file: manifest.output_file.clone(),
             current_model_idx: 0,
             output_written: false,
+            max_per_tool: manifest.max_per_tool,
+            tool_call_counts: HashMap::new(),
         }
     }
 
@@ -516,9 +543,25 @@ impl<'a> Runtime<'a> {
 
 
     fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str, _ctx_prefix: &str, capability_used: &mut bool) -> bool {
-        let cap = self.capabilities.iter().find(|c| c.name() == name);
-        match cap {
-            Some(cap) => match cap.invoke(input) {
+        let cap = match self.capabilities.iter().find(|c| c.name() == name) {
+            Some(c) => c,
+            None => {
+                self.events.push(Event::ObservationReceived(format!("error: {} capability not available", name)));
+                return true;
+            }
+        };
+
+        let count = self.tool_call_counts.entry(name.to_string()).or_insert(0);
+        if *count >= self.max_per_tool {
+            self.events.push(Event::ObservationReceived(format!("error: {} tool call limit ({}) reached", name, self.max_per_tool)));
+            return true;
+        }
+        *count += 1;
+
+        let mut retries = 0;
+        const MAX_RETRIES: u32 = 3;
+        loop {
+            match cap.invoke(input) {
                 Ok(obs) => {
                     *capability_used = true;
                     let obs = Self::clean_observation(&obs);
@@ -527,14 +570,16 @@ impl<'a> Runtime<'a> {
                     return true;
                 }
                 Err(e) => {
+                    if classify_error(&e) == ErrorType::Transient && retries < MAX_RETRIES {
+                        retries += 1;
+                        self.events.push(Event::ObservationReceived(format!("transient error (retry {}/{}): {}", retries, MAX_RETRIES, e)));
+                        std::thread::sleep(Duration::from_millis(100 * retries as u64));
+                        continue;
+                    }
                     self.state = State::Failed;
                     self.events.push(Event::ObservationReceived(format!("error: {}", e)));
                     return false;
                 }
-            },
-            None => {
-                self.events.push(Event::ObservationReceived(format!("error: {} capability not available", name)));
-                return true; // not a fatal error, just unavailable
             }
         }
     }
@@ -689,7 +734,7 @@ fn main() {
     let yaml = fs::read_to_string(spec_path)
         .unwrap_or_else(|_| "name: demo\ncapabilities: [shell]\nmax_iterations: 10".into());
     let manifest: Manifest = serde_yaml::from_str(&yaml).expect("invalid manifest");
-    println!("MOTE v0.9 — {}", manifest.name);
+    println!("MOTE v0.11.1 — {}", manifest.name);
     println!("Task: {}", task);
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
@@ -735,7 +780,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test task");
@@ -755,7 +800,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("loop");
@@ -773,7 +818,7 @@ mod tests {
             endpoint: "http://localhost".into(),
             auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let rt = Runtime::new(chain, &manifest);
         assert_eq!(rt.capabilities.len(), 3);
@@ -791,7 +836,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("repeat");
@@ -815,7 +860,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test empty");
@@ -840,7 +885,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: Some(out_path.clone()),
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test output");
@@ -872,7 +917,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test fallback");
@@ -892,7 +937,7 @@ mod tests {
             name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
-            model_chain: Vec::new(),
+            model_chain: Vec::new(), max_per_tool: 5,
         };
         let mut rt = Runtime::new(chain, &manifest);
         let state = rt.run("test exhausted");
