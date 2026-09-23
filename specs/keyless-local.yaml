@@ -1,0 +1,7 @@
+name: keyless-local
+capabilities: [shell, read_file, write_file, list_dir, git]
+max_iterations: 10
+model: "gpt-oss-20b"
+endpoint: "http://localhost:8765/v1/chat/completions"
+auth: ""
+provider: "openai"

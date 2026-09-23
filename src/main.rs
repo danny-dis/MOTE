@@ -31,30 +31,13 @@ fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completio
 fn default_auth() -> String { String::new() }
 
 const MOTE_SYSTEM_PROMPT: &str = "\
-You are MOTE. Use the available capabilities to gather information, then complete.
-CRITICAL RULES:
-1. On the first turn, you MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER use 'complete:' on turn 1.
-2. Respond with EXACTLY ONE line. No explanations, no markdown, no extra text.
-3. Valid formats:
-   shell: <command>
-   read_file: <path>
-   write_file: <path> | <content>
-   list_dir: <path>
-   git: <args>
-   complete: <summary>
-4. YAGNI: pick the SINGLE simplest action that moves toward the goal. Do not chain speculative reads, writes, or commands. One precise action beats a multi-step guess.
-Examples:
-User: Show current date
-shell: date
-User: List files in current directory
-list_dir: .
-User: Read the README file
-read_file: README.md
-User: Create a file hello.py that prints hi
-write_file: hello.py | print(\"hi\")
-User: Show last 3 git commits
-git: log -3
-After observing results, you may use complete: <summary> to finish.";
+You are MOTE. Use capabilities to gather info, then complete.
+RULES:
+1. First turn: MUST use a capability (shell, read_file, write_file, list_dir, git). NEVER complete: on turn 1.
+2. Respond with EXACTLY ONE line. No markdown, no extra text.
+3. Formats: shell: <cmd> | read_file: <path> | write_file: <path> | <content> | list_dir: <path> | git: <args> | complete: <summary>
+4. YAGNI: pick the SINGLE simplest action. One precise action beats a multi-step guess.
+After observing results, use complete: <summary> to finish.";
 
 #[derive(Debug, PartialEq, Clone)]
 enum Action {
@@ -317,6 +300,12 @@ impl<'a> Runtime<'a> {
         }
     }
 
+    fn maybe_hint_complete(&self, context: &mut String) {
+        if !context.contains("HINT: You have used a capability. You may now call complete: <summary> to finish.") {
+            context.push_str("\nHINT: You have used a capability. You may now call complete: <summary> to finish.");
+        }
+    }
+
     fn run(&mut self, task: &str) -> State {
         let mut context = task.to_string();
         let mut last_action: Option<Action> = None;
@@ -342,12 +331,14 @@ impl<'a> Runtime<'a> {
                     let desc = format!("shell {}", command);
                     if self.invoke_cap("shell", &command, &desc, &mut capability_used) {
                         context = format!("{}\nObservation: {}", context, self.last_obs);
+                        self.maybe_hint_complete(&mut context);
                     } else { break; }
                 }
                 Action::ReadFile { path } => {
                     let desc = format!("read_file {}", path);
                     if self.invoke_cap("read_file", &path, &desc, &mut capability_used) {
                         context = format!("{}\nFile {}:\n{}", context, path, self.last_obs);
+                        self.maybe_hint_complete(&mut context);
                     } else { break; }
                 }
                 Action::WriteFile { path, content } => {
@@ -359,12 +350,14 @@ impl<'a> Runtime<'a> {
                     let desc = format!("list_dir {}", path);
                     if self.invoke_cap("list_dir", &path, &desc, &mut capability_used) {
                         context = format!("{}\nDir {}:\n{}", context, path, self.last_obs);
+                        self.maybe_hint_complete(&mut context);
                     } else { break; }
                 }
                 Action::Git { args } => {
                     let desc = format!("git {}", args);
                     if self.invoke_cap("git", &args, &desc, &mut capability_used) {
                         context = format!("{}\nGit output: {}", context, self.last_obs);
+                        self.maybe_hint_complete(&mut context);
                     } else { break; }
                 }
                 Action::Complete { summary } => {

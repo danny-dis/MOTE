@@ -1,0 +1,7 @@
+name: keyless-pollinations
+capabilities: [shell, read_file, write_file, list_dir, git]
+max_iterations: 10
+model: "gpt-oss-20b"
+endpoint: "https://text.pollinations.ai/openai"
+auth: ""
+provider: "openai"
