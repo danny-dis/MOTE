@@ -10,6 +10,6 @@ cargo build --release
 ./run-agent.sh git-watchdog "Check this workspace and write a report"
 ```
 
-`git-watchdog` is scoped to the manifest workspace; the safe Git mode does **not** scan other repositories. To monitor additional repos, schedule separately scoped runs in an externally isolated environment. A report already at `output_file` is not proof of this run's success: MOTE must explicitly write it or replace it with a fresh `complete:` summary. A failed write fails the run.
+`git-watchdog` is scoped to the manifest workspace; the safe Git mode does **not** scan other repositories. To monitor additional repos, schedule separately scoped runs in an externally isolated environment. `security-scan` is a reduced workspace-only example with `cargo`/`git` access; it does **not** check host ports, Docker, Windows events, or npm, and has no configured report or alert exit behavior. A report already at `output_file` is not proof of this run's success: MOTE must explicitly write it or replace it with a fresh `complete:` summary. A failed write fails the run.
 
 Possible schedules (not installed): homelab every two hours, Git watchdog every four hours, morning brief daily, weekly recap Sunday, security scan daily. Connect a scheduler and notification transport outside MOTE if these are needed. The shell/Git allowlist is not a sandbox; do not send untrusted model output to a privileged host. See [docs/STATUS.md](docs/STATUS.md).

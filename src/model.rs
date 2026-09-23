@@ -202,6 +202,9 @@ impl Model for HttpModel {
 
 pub fn parse_action(content: &str) -> Result<Action, String> {
     let text = content.trim();
+    if text.is_empty() {
+        return Err("action payload is empty".to_owned());
+    }
     let (kind, rest) = text.split_once(':').ok_or("invalid action")?;
     let rest = rest.trim();
     if rest.is_empty() {
@@ -285,6 +288,14 @@ mod tests {
             stream.write_all(response.as_bytes()).unwrap();
         });
         format!("http://{address}/v1/chat/completions")
+    }
+
+    #[test]
+    fn whitespace_only_model_content_is_retryable() {
+        assert_eq!(
+            parse_action(" \n\t").unwrap_err(),
+            "action payload is empty"
+        );
     }
 
     #[test]
