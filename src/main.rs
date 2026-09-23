@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
 use std::process::Command;
+use std::time::Duration;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -9,6 +11,8 @@ struct Manifest {
     capabilities: Vec<String>,
     #[serde(default = "default_max_iters")]
     max_iterations: usize,
+    #[serde(default = "default_max_per_tool")]
+    max_per_tool: usize,
     #[serde(default = "default_model")]
     model: String,
     #[serde(default = "default_endpoint")]
@@ -26,6 +30,7 @@ struct Manifest {
 fn default_provider() -> String { "openai".into() }
 fn default_shell_backend() -> String { "auto".into() }
 fn default_max_iters() -> usize { 20 }
+fn default_max_per_tool() -> usize { 5 }
 fn default_model() -> String { "groq/compound-mini".into() }
 fn default_endpoint() -> String { "https://api.groq.com/openai/v1/chat/completions".into() }
 fn default_auth() -> String { String::new() }
@@ -50,12 +55,25 @@ enum Action {
     Retry,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ErrorType { Transient, Permanent }
+
+fn classify_error(msg: &str) -> ErrorType {
+    let lower = msg.to_lowercase();
+    if lower.contains("timeout") || lower.contains("network") || lower.contains("reset")
+        || lower.contains("unreachable") || lower.contains("refused") || lower.contains("timed out") {
+        ErrorType::Transient
+    } else {
+        ErrorType::Permanent
+    }
+}
+
 trait Model {
     fn infer(&self, prompt: &str) -> Action;
 }
 
 #[derive(Clone, Copy)]
-enum RequestFormat { OpenAI, Gemini, Anthropic }
+enum RequestFormat { OpenAI, Gemini }
 
 struct HttpModel {
     endpoint: String,
@@ -106,12 +124,6 @@ impl Model for HttpModel {
             ),
             RequestFormat::Gemini => format!(
                 r#"{{"contents":[{{"parts":[{{"text":"{}"}}]}},{{"parts":[{{"text":"{}"}}]}}]}}"#,
-                system.replace('"', "\\\"").replace('\n', " "),
-                prompt.replace('"', "\\\"").replace('\n', " ")
-            ),
-            RequestFormat::Anthropic => format!(
-                r#"{{"model":"{}","max_tokens":200,"system":"{}","messages":[{{"role":"user","content":"{}"}}]}}"#,
-                self.model,
                 system.replace('"', "\\\"").replace('\n', " "),
                 prompt.replace('"', "\\\"").replace('\n', " ")
             ),
@@ -174,9 +186,7 @@ struct ShellCap {
 impl ShellCap {
     fn new(backend: &str) -> Self {
         let backend = match backend {
-            "auto" => {
-                if cfg!(windows) { "cmd".into() } else { "sh".into() }
-            }
+            "auto" => if cfg!(windows) { "cmd".into() } else { "sh".into() },
             other => other.into(),
         };
         Self { backend }
@@ -188,7 +198,6 @@ impl Capability for ShellCap {
     fn invoke(&self, cmd: &str) -> Result<String, String> {
         let mut command = match self.backend.as_str() {
             "cmd" => { let mut c = Command::new("cmd"); c.arg("/c"); c }
-            "powershell" => { let mut c = Command::new("powershell"); c.arg("-Command"); c }
             _ => { let mut c = Command::new("sh"); c.arg("-c"); c }
         };
         command.arg(cmd);
@@ -259,10 +268,12 @@ struct Runtime<'a> {
     model: &'a dyn Model,
     capabilities: Vec<Box<dyn Capability>>,
     max_iterations: usize,
+    max_per_tool: usize,
     iterations: usize,
     state: State,
     last_obs: String,
     capability_used: bool,
+    tool_call_counts: HashMap<String, usize>,
     output_file: Option<String>,
 }
 
@@ -285,36 +296,56 @@ impl<'a> Runtime<'a> {
         Self {
             model, capabilities,
             max_iterations: manifest.max_iterations,
+            max_per_tool: manifest.max_per_tool,
             iterations: 0,
             state: State::Running,
             last_obs: String::new(),
             capability_used: false,
+            tool_call_counts: HashMap::new(),
             output_file: manifest.output_file.clone(),
         }
     }
 
     fn invoke_cap(&mut self, name: &str, input: &str, action_desc: &str) -> bool {
-        let cap = self.capabilities.iter().find(|c| c.name() == name);
-        match cap {
-            Some(cap) => match cap.invoke(input) {
+        let cap = match self.capabilities.iter().find(|c| c.name() == name) {
+            Some(c) => c,
+            None => {
+                self.last_obs = format!("error: {name} capability not available");
+                println!("{}", self.last_obs);
+                return true;
+            }
+        };
+
+        let count = self.tool_call_counts.entry(name.to_string()).or_insert(0);
+        if *count >= self.max_per_tool {
+            self.last_obs = format!("error: {name} tool call limit ({}) reached", self.max_per_tool);
+            println!("{}", self.last_obs);
+            return true;
+        }
+        *count += 1;
+
+        let mut retries = 0;
+        const MAX_RETRIES: u32 = 3;
+        loop {
+            match cap.invoke(input) {
                 Ok(obs) => {
                     self.capability_used = true;
                     self.last_obs = obs.clone();
                     println!("executed: {action_desc}");
                     println!("observation: {obs}");
-                    true
+                    return true;
                 }
                 Err(e) => {
-                    self.state = State::Failed;
+                    if classify_error(&e) == ErrorType::Transient && retries < MAX_RETRIES {
+                        retries += 1;
+                        println!("transient error (retry {retries}/{MAX_RETRIES}): {e}");
+                        std::thread::sleep(Duration::from_millis(100 * retries as u64));
+                        continue;
+                    }
                     self.last_obs = format!("error: {e}");
                     println!("{}", self.last_obs);
-                    false
+                    return true;
                 }
-            },
-            None => {
-                self.last_obs = format!("error: {name} capability not available");
-                println!("{}", self.last_obs);
-                true
             }
         }
     }
@@ -403,6 +434,8 @@ impl<'a> Runtime<'a> {
         }
         if self.iterations >= self.max_iterations && self.state == State::Running {
             self.state = State::Failed;
+            println!("Budget exceeded after {} iterations. Partial context:", self.iterations);
+            println!("{}", context);
         }
         self.state.clone()
     }
@@ -415,7 +448,7 @@ fn main() {
     let yaml = fs::read_to_string(spec_path)
         .unwrap_or_else(|_| "name: demo\ncapabilities: [shell]\nmax_iterations: 10".into());
     let manifest: Manifest = serde_yaml::from_str(&yaml).expect("invalid manifest");
-    println!("MOTE v0.9 - {}", manifest.name);
+    println!("MOTE v0.10.0 — {}", manifest.name);
     println!("Task: {}", task);
     println!("Model: {}", manifest.model);
     println!("Capabilities: {:?}", manifest.capabilities);
@@ -424,10 +457,6 @@ fn main() {
         "google" => Box::new(HttpModel::new(
             "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={auth}",
             &manifest.model, &manifest.auth, true, RequestFormat::Gemini, "/candidates/0/content/parts/0/text",
-        )),
-        "anthropic" => Box::new(HttpModel::new(
-            "https://api.anthropic.com/v1/messages",
-            &manifest.model, &manifest.auth, false, RequestFormat::Anthropic, "/content/0/text",
         )),
         _ => Box::new(HttpModel::new(
             &manifest.endpoint, &manifest.model, &manifest.auth, false, RequestFormat::OpenAI, "/choices/0/message/content",
@@ -438,6 +467,9 @@ fn main() {
     println!("---");
     println!("Final state: {:?}", final_state);
     println!("Iterations used: {}/{}", rt.iterations, rt.max_iterations);
+    for (tool, count) in &rt.tool_call_counts {
+        println!("  {tool}: {count} calls");
+    }
 }
 
 #[cfg(test)]
@@ -463,7 +495,7 @@ mod tests {
         }
         let m = TwoStepModel;
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5, max_per_tool: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
@@ -480,7 +512,7 @@ mod tests {
         }
         let m = LoopForever;
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3,
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 3, max_per_tool: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
@@ -490,11 +522,30 @@ mod tests {
         assert_eq!(rt.iterations, 3);
     }
     #[test]
+    fn test_per_tool_limit() {
+        struct ShellMany;
+        impl Model for ShellMany {
+            fn infer(&self, _: &str) -> Action {
+                Action::Shell { command: "echo hi".into() }
+            }
+        }
+        let m = ShellMany;
+        let manifest = Manifest {
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10, max_per_tool: 2,
+            model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
+            provider: String::new(), shell_backend: "sh".into(), output_file: None,
+        };
+        let mut rt = Runtime::new(&m, &manifest);
+        let state = rt.run("run shell repeatedly");
+        assert_eq!(state, State::Failed);
+        assert_eq!(rt.tool_call_counts.get("shell"), Some(&2));
+    }
+    #[test]
     fn test_capability_registry() {
         let m = MockModel;
         let manifest = Manifest {
             name: "t".into(), capabilities: vec!["shell".into(), "read_file".into(), "git".into()],
-            max_iterations: 5, model: "test".into(), endpoint: "http://localhost".into(),
+            max_iterations: 5, max_per_tool: 5, model: "test".into(), endpoint: "http://localhost".into(),
             auth: String::new(), provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
         let rt = Runtime::new(&m, &manifest);
@@ -508,7 +559,7 @@ mod tests {
         }
         let m = RepeatModel;
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10,
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 10, max_per_tool: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
@@ -531,7 +582,7 @@ mod tests {
         }
         let m = EmptyModel;
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5, max_per_tool: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: None,
         };
@@ -555,7 +606,7 @@ mod tests {
         let m = WriteModel;
         let out_path = "test_output_file.txt".to_string();
         let manifest = Manifest {
-            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5,
+            name: "t".into(), capabilities: vec!["shell".into()], max_iterations: 5, max_per_tool: 5,
             model: "test".into(), endpoint: "http://localhost".into(), auth: String::new(),
             provider: String::new(), shell_backend: "sh".into(), output_file: Some(out_path.clone()),
         };
@@ -565,5 +616,12 @@ mod tests {
         let written = fs::read_to_string(&out_path).expect("output file not written");
         assert_eq!(written, "report content here");
         fs::remove_file(&out_path).ok();
+    }
+    #[test]
+    fn test_error_classification() {
+        assert_eq!(classify_error("connection timeout"), ErrorType::Transient);
+        assert_eq!(classify_error("network unreachable"), ErrorType::Transient);
+        assert_eq!(classify_error("file not found"), ErrorType::Permanent);
+        assert_eq!(classify_error("permission denied"), ErrorType::Permanent);
     }
 }
