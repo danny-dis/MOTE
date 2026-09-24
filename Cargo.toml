@@ -6,7 +6,13 @@ description = "Minimal Orchestration & Task Execution"
 license = "MIT"
 repository = "https://github.com/danny-dis/MOTE"
 readme = "README.md"
-exclude = ["reports/**", "!reports/.keep"]
+exclude = [
+    "reports/**", "!reports/.keep",
+    "DESIGN_PRINCIPLES.md", "ENGINEERING.md", "HOMELAB_MONITOR.md",
+    "SDK_SPEC.md", "SOVEREIGN_SCHEDULER.md", "SPEC.md",
+    "docs/DOC_AUDIT_FACTS.md", "docs/LIFEOS-FABRIC-LEARNINGS.md",
+    "docs/jev-integration-spec.md", "test_input.txt",
+]
 
 [lib]
 name = "mote"
