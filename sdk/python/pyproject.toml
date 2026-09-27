@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mote-sdk"
+version = "0.1.0"
+description = "Python host SDK for the mote stdio bridge"
+requires-python = ">=3.10"
+dependencies = []
+license = {file = "LICENSE"}
+readme = "README.md"
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+
+[tool.setuptools]
+packages = ["mote_sdk"]

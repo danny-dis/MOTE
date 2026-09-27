@@ -33,6 +33,37 @@ jobs:
         run: cargo run --locked --example basic_agent
       - name: Custom-tool example
         run: cargo run --locked --example custom_tool
+      - name: Install Python for SDK tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Node for SDK tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python SDK and real bridge integration
+        shell: bash
+        env:
+          MOTE_BRIDGE: ${{ github.workspace }}/target/release/mote-bridge${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: |
+          python -m pip install "./sdk/python[test]"
+          python -m pytest sdk/python/tests -q
+      - name: TypeScript SDK and real bridge integration
+        shell: bash
+        env:
+          MOTE_BRIDGE: ${{ github.workspace }}/target/release/mote-bridge${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: |
+          npm --prefix sdk/typescript ci
+          npm --prefix sdk/typescript test
+          npm --prefix sdk/typescript run pack:check
+      - name: Rust application starter
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          cargo test --locked --manifest-path starters/rust-agent/Cargo.toml
+          cargo fmt --check --manifest-path starters/rust-agent/Cargo.toml
+          cargo clippy --locked --manifest-path starters/rust-agent/Cargo.toml --all-targets -- -D warnings
       - name: Verify distributable package
         if: runner.os == 'Linux'
         run: cargo package --locked

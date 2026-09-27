@@ -1,0 +1,14 @@
+name: rust-starter
+workspace: ./workspace
+capabilities: [uppercase, write_file]
+output_file: report.txt
+max_iterations: 6
+max_per_tool: 3
+max_runtime_seconds: 120
+models:
+  - provider: openai-compatible
+    endpoint: http://127.0.0.1:47113/v1/chat/completions
+    model: auto
+    timeout_seconds: 30
+    # For an authenticated endpoint, set auth_env to an environment variable
+    # name (e.g. MOTE_API_KEY), never put the actual credential in this file.

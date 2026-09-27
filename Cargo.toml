@@ -2,6 +2,7 @@
 name = "mote-agent"
 version = "0.13.0"
 edition = "2021"
+default-run = "mote"
 description = "Minimal Orchestration & Task Execution"
 license = "MIT"
 repository = "https://github.com/danny-dis/MOTE"

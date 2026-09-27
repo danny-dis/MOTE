@@ -88,6 +88,15 @@ The current CLI reads YAML manifests. `AGENT.md` and external authorization/poli
 
 ## Building on MOTE
 
+Start with the [application-building guide](docs/BUILDING_ON_MOTE.md):
+
+- **Rust:** [application starter](starters/rust-agent/) with a real model adapter, custom tool, and independent output validation.
+- **Python:** [source-installable SDK](sdk/python/) with Python callbacks.
+- **TypeScript/Node:** [source-installable SDK](sdk/typescript/) with synchronous or asynchronous callbacks.
+- **Cross-language contract:** [`mote-bridge` protocol v1](docs/BRIDGE_PROTOCOL.md), a separate, one-run stdio binary. No server required; registration never grants permission.
+
+Build both binaries with `cargo build --locked --release --bins`. SDKs do not bundle or download the executable; these packages are not automatically published to PyPI/npm. Existing `mote` CLI usage remains unchanged.
+
 MOTE exposes a Rust library: implement the `Model` trait to supply actions, configure a `Manifest`, then run `Runtime` in a `WorkspaceFs`. The Cargo package is named `mote-agent` (the unrelated `mote` package on crates.io is **not** this project); its Rust library import remains `mote`. The runnable examples work without a model account:
 
 ```bash
