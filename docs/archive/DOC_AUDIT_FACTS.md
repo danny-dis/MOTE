@@ -1,5 +1,7 @@
 # Documentation audit facts (merged working tree)
 
+> **Historical audit snapshot — not current product documentation.** These facts preserve a point-in-time audit and do not establish live health, current behavior, or shipped features. For current MOTE documentation, see [STATUS](../STATUS.md), [BUILDING_ON_MOTE](../BUILDING_ON_MOTE.md), and [QUICKSTART](../QUICKSTART.md).
+
 - Package: Rust `mote-agent` source crate (library import `mote`) and thin CLI, 0.13.x (`Cargo.toml`, `src/lib.rs`, `src/main.rs`). Exact release/version and merged CI status must be checked before updating counts here.
 - Runtime: YAML `Manifest` (`src/config.rs`), 7 built-in actions plus host-registered `custom` (`src/action.rs`), provider chain (OpenAI-compatible/DMR-X, Gemini, Anthropic in `src/model.rs`), optional typed decision adapters (`src/decision.rs`), post-run JSONL events (`src/event.rs`), bounded iteration/run time, cancellation, per-tool limit (default 5), read/list-only transient retries (`src/runtime.rs`).
 - Built-in file actions stay inside configured workspace (`src/capability.rs`). Shell, Git, and custom tool handlers are NOT sandboxed; allowed programs/handlers can access host secrets/network. No AGENT.md loader, external policy engine, dynamic plug-in loading/ABI, MCP, browser, scheduler service, or guaranteed child-process isolation exists.

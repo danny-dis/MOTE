@@ -1,229 +1,122 @@
 # MOTE
 
-**Minimal Orchestration & Task Execution**
+**A small execution engine for AI agents. Build the application around it.**
 
-MOTE is a lightweight, model-agnostic Rust library and CLI for building trusted-workspace agents. It keeps the execution loop small and leaves scheduling, memory, user interfaces, and workload isolation to the application that embeds it. It is intentionally independent of GLUE, ATHENA, Ghost Factory, DANNY, and any particular model provider.
+[![CI](https://github.com/danny-dis/MOTE/actions/workflows/ci.yml/badge.svg?branch=production-ready)](https://github.com/danny-dis/MOTE/actions/workflows/ci.yml)
+[![Release](https://github.com/danny-dis/MOTE/actions/workflows/release.yml/badge.svg)](https://github.com/danny-dis/MOTE/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Why MOTE?
+MOTE — **Minimal Orchestration & Task Execution** — is a Rust library and command-line
+program. It asks a model for the next action, checks the configured capabilities,
+executes a tool, and feeds the result back until the task finishes or a limit is reached.
 
-Most modern coding agents bundle a large amount of functionality into one application: planning, memory, browser automation, MCP, repository indexing, subagents, UI, provider integrations, and orchestration.
+Use it to build a focused document worker, repository assistant, or application-specific
+agent without adopting a full agent platform. Your application owns the interface,
+users, approvals, storage, scheduling, and acceptance checks.
 
-MOTE takes the opposite approach:
+[Download](https://github.com/danny-dis/MOTE/releases/latest) ·
+[Quick start](docs/QUICKSTART.md) · [Documentation](docs/README.md) ·
+[Build an application](docs/BUILDING_ON_MOTE.md) · [Changelog](CHANGELOG.md)
 
-> **Keep the agent kernel tiny. Make capabilities composable.**
+> MOTE is for trusted workspaces and trusted operators. Capability checks are **not an
+> OS sandbox**. Connect your own model/provider; no model, account, or API key is bundled.
+> The repository is currently private, so source and downloads require access.
 
-A MOTE instance can start as a minimal worker and acquire additional capabilities only when a task requires them.
+## Choose your starting point
 
-## Core model
+| You want to… | Start here |
+|---|---|
+| Run a task without installing Rust | [Download and run the CLI](docs/QUICKSTART.md) |
+| Use Python functions as agent tools | [Python SDK](sdk/python/README.md) |
+| Use JavaScript/TypeScript functions as tools | [TypeScript SDK](sdk/typescript/README.md) |
+| Embed the engine directly in Rust | [Rust application starter](starters/rust-agent/README.md) |
+| Configure models, permissions, and limits | [Configuration reference](docs/CONFIGURATION.md) |
+| Contribute or build from source | [Contributing](CONTRIBUTING.md) |
 
-```text
-             Agent Specification
-                 (YAML)
-                      |
-                      v
-              +---------------+
-              |  MOTE Runtime |
-              |---------------|
-              | spec loader   |
-              | agent loop    |
-              | action parser |
-              | observation   |
-              | event stream  |
-              +-------+-------+
-                      |
-          +-----------+-----------+
-          |           |           |
-       Model       Runtime     Capability
-       Adapter    Environment    Layer
-          |           |           |
-        LLM/API   shell/VM     git/fs/http/...
+## Download and run
+
+Get the archive for your computer from [Releases](https://github.com/danny-dis/MOTE/releases/latest):
+
+- **Windows x64:** ZIP containing `mote.exe` and `mote-bridge.exe`.
+- **Linux x64:** tar.gz; Ubuntu 22.04 or compatible newer system with OpenSSL 3 and CA certificates.
+- **macOS Apple Silicon:** tar.gz; macOS 14 or newer. Intel Macs currently require a source build.
+
+Verify its checksum, extract it, and open a terminal in the extracted directory.
+On Windows PowerShell:
+
+```powershell
+.\mote.exe --version
+.\mote.exe --help
 ```
 
-The essential loop is:
+On Linux/macOS:
 
-```text
-LOAD -> THINK -> ACT -> OBSERVE -> REPEAT -> COMPLETE
+```sh
+./mote --version
+./mote --help
 ```
 
-## Design principles
+Edit the included `agent.yaml` to select your model endpoint and model name. Set the
+credential environment variable named by `auth_env`, or remove that field for a
+keyless local server. Put a small, non-sensitive file in `workspace`, then run:
 
-- **Tiny core** — minimize mandatory code and dependencies.
-- **Rust-first** — low overhead, fast startup, strong process and concurrency primitives, single-binary distribution.
-- **Model agnostic** — MOTE does not own the model.
-- **Capability based** — tools are dynamically attached rather than permanently embedded.
-- **Specification driven** — Markdown/YAML can define an agent's identity, goals, constraints, and capabilities.
-- **Environment agnostic** — run locally, in containers, microVMs, remote workers, or other execution environments.
-- **Composable** — use MOTE alone or as a worker primitive inside larger systems.
-- **Observable** — every important action should be representable as structured events.
-- **Scoped by default** — no capability is granted implicitly; process isolation and host authorization remain the embedding application's responsibility.
-
-## Agent specification
-
-A repository can contain an `AGENT.md` describing the citizen that MOTE should embody.
-
-Example:
-
-```markdown
-# Repository Maintainer
-
-## Identity
-Maintain this repository and keep changes aligned with its engineering standards.
-
-## Goals
-- Fix requested defects.
-- Keep tests passing.
-- Minimize unnecessary changes.
-
-## Capabilities
-- filesystem
-- shell
-- git
-
-## Constraints
-- Do not modify protected configuration.
-- Do not publish credentials.
+```sh
+./mote agent.yaml "List the workspace files and summarize them"
 ```
 
-The current CLI reads YAML manifests. `AGENT.md` and external authorization/policy integration remain design goals, not implemented security controls.
+On Windows use `.\mote.exe` in place of `./mote`. The example grants only directory
+listing and file reads. Follow the [full quick start](docs/QUICKSTART.md) for setup,
+authentication, and troubleshooting. Binaries are currently unsigned/not notarized.
 
-## Downloads
+## What is included
 
-Download prebuilt Windows x64, Linux x64, and macOS Apple Silicon binaries from
-[GitHub Releases](https://github.com/danny-dis/MOTE/releases/latest). Each archive
-contains the CLI, SDK bridge, example configuration, quick-start, and licenses.
-See [binary quick-start](docs/QUICKSTART.md) for requirements and checksum checks.
-Repository access is required while MOTE is private.
+- **Rust runtime and CLI:** YAML configuration, explicit capability grants, model
+  fallback, run/tool limits, cancellation hooks, and post-run JSONL events.
+- **Built-in tools:** file reads/writes, directory listing, restricted shell/Git modes,
+  and optional typed decisions. Tool access is opt-in.
+- **Custom tools:** application-owned Rust handlers, or Python/TypeScript callbacks
+  through the separate `mote-bridge` process.
+- **Thin SDKs:** source-installable packages with no third-party runtime dependencies.
+- **Verified distributions:** automated cross-platform checks, extracted-archive
+  integration tests, SHA-256 checksums, and upstream license notices.
 
-Releases are automatic on matching version tags; see [release procedure](docs/RELEASING.md).
+The Rust package is `mote-agent`; its library import is `mote`. The unrelated `mote`
+package on crates.io is **not this project**. These SDKs are not published to npm/PyPI.
 
-## Building on MOTE
+## What MOTE deliberately does not provide
 
-Start with the [application-building guide](docs/BUILDING_ON_MOTE.md):
+A chat UI, model hosting, database, scheduler, browser, MCP server, multi-user access
+control, or sandbox. An `AGENT.md` file does not configure this runtime; the CLI reads
+YAML. Tool callbacks are interactive, but runtime events arrive after the run, not as
+live progress. A completed run is not proof its generated answer or file is correct.
 
-- **Rust:** [application starter](starters/rust-agent/) with a real model adapter, custom tool, and independent output validation.
-- **Python:** [source-installable SDK](sdk/python/) with Python callbacks.
-- **TypeScript/Node:** [source-installable SDK](sdk/typescript/) with synchronous or asynchronous callbacks.
-- **Cross-language contract:** [`mote-bridge` protocol v1](docs/BRIDGE_PROTOCOL.md), a separate, one-run stdio binary. No server required; registration never grants permission.
+See [current status](docs/STATUS.md), [architecture](docs/ARCHITECTURE.md), and
+[security boundaries](SECURITY.md) before deploying unattended agents.
 
-Build both binaries with `cargo build --locked --release --bins`. SDKs do not bundle or download the executable; these packages are not automatically published to PyPI/npm. Existing `mote` CLI usage remains unchanged.
+## Development and releases
 
-MOTE exposes a Rust library: implement the `Model` trait to supply actions, configure a `Manifest`, then run `Runtime` in a `WorkspaceFs`. The Cargo package is named `mote-agent` (the unrelated `mote` package on crates.io is **not** this project); its Rust library import remains `mote`. The runnable examples work without a model account:
+From a source checkout with stable Rust and the platform's Rust build prerequisites:
 
-```bash
-cargo run --locked --example basic_agent
+```sh
+cargo build --locked --release --bins
+cargo test --locked --all-targets
 cargo run --locked --example custom_tool
 ```
 
-The [custom-tool example](examples/custom_tool.rs) registers a host-owned Rust handler with `Runtime::with_tools` and grants it by name in the manifest. It accepts a JSON-object input and returns a bounded text observation; unknown and ungranted names are rejected. For HTTP models, the host must describe registered tools in the task; action-line syntax is `custom: name | {"key":"value"}`. Registration does not itself grant permission. A YAML file alone cannot load executable Rust handlers. There is no dynamic plug-in ABI or tool sandbox; handlers run in the embedding process and must bound their own blocking work.
+The examples use deterministic models and do not need a provider account.
+See [Contributing](CONTRIBUTING.md) for the full verification commands.
 
-## Extensibility
+Pushing a stable version tag matching `Cargo.toml` triggers the
+[automatic release workflow](docs/RELEASING.md). It tests before publishing; maintainers
+still choose and tag each version. There is no automatic release on every commit.
 
-MOTE should remain small even when the surrounding system becomes large.
+## Community and license
 
-Optional capabilities may include:
+[Report a bug](https://github.com/danny-dis/MOTE/issues/new/choose) ·
+[Support](SUPPORT.md) · [Security reporting](SECURITY.md#reporting-a-vulnerability) ·
+[Design principles](DESIGN_PRINCIPLES.md)
 
-- filesystem
-- shell
-- git
-- GitHub
-- HTTP
-- browser
-- databases
-- MCP
-- memory
-- repository maps/indexing
-- planning
-- subagents
-- computer use
-- remote execution
-- GLUE citizen integration
-
-None are required by the core runtime.
-
-## Ecosystem role
-
-MOTE is an independent primitive.
-
-```text
-ATHENA       -> can schedule MOTE workers
-GLUE         -> can embody GitHub citizens through MOTE
-Ghost Factory -> can use MOTE for lightweight software tasks
-DANNY        -> can request MOTE for inexpensive delegated work
-DMR-X        -> can select the model used by MOTE
-MOTE         -> remains independently deployable
-```
-
-This separation prevents the lightweight runtime from becoming another monolithic orchestration platform.
-
-## Non-goals
-
-MOTE is not intended to initially be:
-
-- a full IDE
-- a replacement for Claude Code, OpenCode, OpenHands, or other heavyweight coding environments
-- a mandatory multi-agent framework
-- a memory database
-- a model provider
-- an enterprise control plane
-
-Those capabilities may be integrated externally when useful.
-
-## Status and quick start
-
-MOTE 0.13.0 (`mote-agent` Cargo package) contains a Rust library (`src/lib.rs`, imported as `mote`) and CLI (`src/main.rs`). A YAML manifest selects the model chain, workspace, limits, and explicit capabilities. The built-in actions are `shell`, `read_file`, `write_file`, `list_dir`, `git`, `decision`, and `complete`; Rust embedders can additionally register host-owned custom handlers with explicit manifest grants. A task must use at least one permitted capability before completion. `max_per_tool` defaults to 5 physical calls per capability (including retries); transient read/list failures may retry up to three times with backoff. Shell, Git, and writes are never auto-retried. A successful explicit write to the configured `output_file` ends the run; a summary cannot claim success by reusing an old report.
-
-```bash
-cargo build --release
-# Configure a reachable OpenAI-compatible endpoint in specs/dmr-x-local.yaml first.
-./target/release/mote --jsonl specs/dmr-x-local.yaml "Describe the workspace"
-```
-
-`--jsonl` prints structured lifecycle events after the run, not an incremental live stream. Model credentials are read from the environment variable named by a manifest's `auth_env`, never stored in example YAML. See `specs/` for examples and `docs/STATUS.md` for implementation status. For a local endpoint without credentials, `specs/keyless-local.yaml` is a parser-tested example; a working server is still required. The Pollinations example sends workspace observations to a third-party endpoint and has not been live-verified. On decision-provider failure, runtime fallback is available only for a choice keyed `deny`, `reject`, `block`, or `escalate` that appears in the request criteria; score and Noul requests fail rather than receiving an invented zero. The caller must treat those keys as denying actions, not aliases for approval.
-
-**Security boundary:** capabilities are deny-by-default and built-in file actions check workspace paths, but shell and Git launch normal OS processes with the invoking user's permissions. An executable allowlist and timeout are **not an OS sandbox**: permitted programs and their arguments may access files, network, subprocesses, and secrets outside the workspace. Use an externally isolated account/container/VM for untrusted model output or repositories; do not treat the manifest as authorization on its own. Cancellation and time limits are best-effort rather than a guarantee against child processes or blocked network calls. JSONL events include observations and most action arguments (write-file content is omitted), and observations are sent to the configured model endpoint; do not point MOTE at sensitive workspaces or share its event logs without review. See the [deployment security checklist](SECURITY.md).
-
-## Production deployment boundary
-
-MOTE is a **library/CLI kernel**, not a hosted agent service or security sandbox. A supported deployment uses a trusted operator-controlled manifest and runs each agent under a dedicated low-privilege identity or external container/VM with constrained filesystem, environment, and network access. The host must decide which manifests, capabilities, model endpoints, and Rust tool handlers are allowed; loading a user-submitted manifest does **not** authorize its requests. Use the [security checklist](SECURITY.md) before unattended runs. Multi-tenant execution of arbitrary user agents on a shared host is outside this release scope.
-
-The embedding application owns scheduling, persistence, user authentication, credential storage, monitoring, and restart/retry policy. MOTE provides bounded individual runs and events, not a durable job queue. Exercise the real model endpoint and the target OS/environment before promoting an agent to production; the keyless example and CI do not test a provider's availability. This pre-1.0 Rust API may change in a minor release; pin a compatible crate version and test upgrades.
-
-## Verification and action protocol
-
-Run `cargo test --locked --all-targets`, `cargo test --locked --release --all-targets`,
-`cargo fmt --check`, and `cargo clippy --locked --all-targets -- -D warnings` for deterministic checks.
-For opt-in **real model** verification, build the release binary and run:
-
-```bash
-python scripts/live_smoke.py --binary target/release/mote --output smoke-results
-# Windows: --binary target/release/mote.exe
-```
-
-The stdlib-only smoke runner uses synthetic temporary workspaces through a local
-DMR-X endpoint by default. It checks CSV aggregation, exact whitespace/Unicode
-copying, and configuration edits, three times each. It independently validates
-all output files, retains every attempt in a new evidence directory, and exits
-nonzero if any task fails. `--endpoint`, `--model`, and `--auth-env` select another
-provider; the endpoint receives the synthetic inputs. It is not run by CI and
-makes no claim that all providers or workloads are reliable.
-
-HTTP models are prompted for one JSON action, for example
-`{"action":"write_file","path":"report.txt","content":"    indented\n"}`
-(with the newline escaped in the JSON string). This uses the existing `Action`
-serialization format and preserves content exactly, including empty files.
-Legacy `write_file: path | content` remains accepted: at most one ASCII space
-immediately after `|` is a separator; all subsequent whitespace is file content.
-Other legacy action lines remain supported. Responses explicitly marked
-truncated, filtered, or otherwise unfinished are rejected before execution;
-compatible endpoints that omit completion metadata remain supported.
-
-Each model turn receives granted capability names, the per-tool budget, the
-output path, and labeled results of completed actions. A completion summary
-written to `output_file` uses the same permission, budget and event path as an
-explicit `write_file`. `Completed` means execution finished, not that an arbitrary
-artifact is semantically correct; the embedding application must still validate
-its own acceptance criteria.
-
-## License
-
-MIT. See [LICENSE](LICENSE). You may build and distribute agents on top of MOTE under the terms of that license. Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md) when distributing a bundled binary.
+MOTE is [MIT licensed](LICENSE). Binary archives include dependency license texts and
+Rust standard-library notices; see [third-party notices](THIRD_PARTY_NOTICES.md).
+Historical proposals and sample reports are preserved in [the archive](docs/archive/README.md),
+not presented as shipped features.

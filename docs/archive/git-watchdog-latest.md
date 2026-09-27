@@ -1,5 +1,7 @@
 # Git Watchdog Report — 2026-09-12 08:00 EAT
 
+> **Historical sample report — not current product documentation or live health data.** This report preserves a past sample and does not establish current repository state, runtime behavior, or shipped features. Review sample paths/process data for sensitivity before reuse. For current MOTE documentation, see [STATUS](../STATUS.md), [BUILDING_ON_MOTE](../BUILDING_ON_MOTE.md), and [QUICKSTART](../QUICKSTART.md).
+
 **STATUS: OK** (all tracked repos are clean)
 
 ## Repos Scanned

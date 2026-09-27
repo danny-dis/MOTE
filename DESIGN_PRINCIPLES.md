@@ -1,5 +1,9 @@
 # MOTE Design Principles
 
+These are engineering admission criteria, not a promise that proposed features
+exist. See [current architecture](docs/ARCHITECTURE.md), [product status](docs/STATUS.md),
+and [contributing](CONTRIBUTING.md) for the shipped implementation and workflow.
+
 ## 1. The kernel is a constraint, not a feature marketplace
 
 Every capability added to the kernel increases complexity, testing burden, attack surface, and maintenance cost. MOTE should therefore keep a small number of primitives exceptionally stable.

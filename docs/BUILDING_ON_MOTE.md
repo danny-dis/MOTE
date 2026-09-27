@@ -4,9 +4,17 @@ MOTE supplies the execution loop. Your application owns authentication, UI,
 persistence, scheduling, business tools, approvals, and output validation.
 Choose the language boundary you need; an HTTP service is not required.
 
-## Build the executables
+## Get the engine
 
-From a checkout of this repository with stable Rust installed:
+For Python/TypeScript, download and extract the archive for your platform from
+[GitHub Releases](https://github.com/danny-dis/MOTE/releases/latest). Follow the
+[binary quick start](QUICKSTART.md), verify the checksum, and use the absolute path
+to `mote-bridge` (`mote-bridge.exe` on Windows). No Rust installation is needed.
+Repository access is required while the project is private; binaries are unsigned.
+
+The SDKs are installed from this source checkout separately. They are not published
+to npm/PyPI and do not bundle or download the executable. If you prefer to compile,
+run this from a checkout with stable Rust and its native build tools installed:
 
 ```bash
 cargo build --locked --release --bins
@@ -15,7 +23,7 @@ cargo build --locked --release --bins
 This produces `target/release/mote` and `target/release/mote-bridge` (append `.exe`
 on Windows). `mote` is the existing YAML CLI. `mote-bridge` lets Python/TypeScript
 applications supply callbacks over a versioned stdio protocol. The SDK does not
-download binaries or start a server. Point it at a bridge you built and trust.
+download binaries or start a server. Point it at a downloaded or locally built bridge you trust.
 
 ## Python
 
@@ -36,8 +44,8 @@ result = client.run(
         "capabilities": ["uppercase"],
         "models": [{
             "provider": "openai-compatible",
-            "model": "auto",
-            "endpoint": "http://127.0.0.1:47113/v1/chat/completions",
+            "model": "your-model-name",
+            "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
         }],
     },
     task='Call uppercase with {"text":"hello"}, then complete.',
@@ -53,6 +61,7 @@ print(result.events)
 
 The endpoint must be reachable; change it/model for your provider. For API keys,
 set `auth_env` in the model configuration to an environment-variable **name**.
+See [Configuration](CONFIGURATION.md) for adapter names, fields, and defaults.
 The SDK inherits environment variables and accepts explicit overrides; it does
 not embed secrets in requests to the bridge. See [Python SDK](../sdk/python/README.md)
 for errors, limits, testing and the runnable example.
@@ -80,8 +89,8 @@ const result = await client.run({
     capabilities: ["uppercase"],
     models: [{
       provider: "openai-compatible",
-      model: "auto",
-      endpoint: "http://127.0.0.1:47113/v1/chat/completions",
+      model: "your-model-name",
+      endpoint: "http://127.0.0.1:8080/v1/chat/completions",
     }],
   },
   task: 'Call uppercase with {"text":"hello"}, then complete.',

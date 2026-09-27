@@ -1,6 +1,8 @@
 # MOTE SDK Specification
 
-**Not implemented as a standalone SDK.** This is a design target, not a promise of stable extension/registration APIs. The actual public Rust modules are exported by `src/lib.rs`; see [docs/STATUS.md](docs/STATUS.md).
+> **Historical design proposal — not current product documentation.** This specification preserves a proposed SDK surface and does not establish live health, current behavior, or shipped features. For current MOTE documentation, see [STATUS](../STATUS.md), [BUILDING_ON_MOTE](../BUILDING_ON_MOTE.md), and [QUICKSTART](../QUICKSTART.md).
+
+**Not implemented as a standalone SDK.** This is a design target, not a promise of stable extension/registration APIs. The actual public Rust modules are exported by `src/lib.rs`; see [docs/STATUS.md](../STATUS.md).
 
 **Status:** Design specification
 **Audience:** MOTE runtime engineers, SDK implementers, and third-party agent developers
@@ -408,7 +410,7 @@ MOTE + shell + git + code tools = MOTE Coding Agent
 
 ## 14. Distribution and Licensing Boundary
 
-MOTE itself is licensed under MIT; see [LICENSE](LICENSE). Third-party applications and agents may be distributed under licenses of their authors' choice, subject to MOTE's MIT notice and their own dependency terms. An SDK boundary is still a design target, not an implemented stable plug-in API.
+MOTE itself is licensed under MIT; see [LICENSE](../../LICENSE). Third-party applications and agents may be distributed under licenses of their authors' choice, subject to MOTE's MIT notice and their own dependency terms. An SDK boundary is still a design target, not an implemented stable plug-in API.
 
 ```text
 MIT-licensed MOTE runtime and Rust library

@@ -1,3 +1,15 @@
+## MOTE 0.13.1
+
+This patch corrects the downloadable example manifest: `auth_env` replaces the
+unsupported `api_key_env`. A regression test parses that exact release example.
+Existing v0.13.0 users can make the same field-name change manually; provider keys
+remain in environment variables, never in YAML. No bridge protocol change is required.
+
+Documentation now includes a configuration reference, architecture guide, updated
+SDK instructions, contribution/support guides, and a clearly separated design archive.
+
+## Downloads
+
 Download the archive matching your operating system and architecture, verify it against `SHA256SUMS`, then extract it. Each archive includes the MOTE CLI, the stdio bridge for Python/TypeScript SDKs, a read-only example manifest, quick-start instructions, and licenses. Rust is not required to run these binaries.
 
 - **Windows x64:** ZIP; includes `mote.exe` and `mote-bridge.exe`.

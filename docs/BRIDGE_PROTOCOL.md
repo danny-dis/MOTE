@@ -1,4 +1,8 @@
-# MOTE stdio bridge protocol v1
+# MOTE bridge protocol v1
+
+This is the implemented stdio contract for SDK authors. Application developers
+should start with [Building on MOTE](BUILDING_ON_MOTE.md); manifest fields are
+documented in [Configuration](CONFIGURATION.md). CLI JSONL is a different format.
 
 `mote-bridge` is a separate executable built with `cargo build --release --bins`.
 It embeds the existing runtime without changing the `mote` CLI. One process runs

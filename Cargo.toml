@@ -1,6 +1,6 @@
 [package]
 name = "mote-agent"
-version = "0.13.0"
+version = "0.13.1"
 edition = "2021"
 default-run = "mote"
 description = "Minimal Orchestration & Task Execution"
@@ -9,10 +9,7 @@ repository = "https://github.com/danny-dis/MOTE"
 readme = "README.md"
 exclude = [
     "reports/**", "!reports/.keep",
-    "DESIGN_PRINCIPLES.md", "ENGINEERING.md", "HOMELAB_MONITOR.md",
-    "SDK_SPEC.md", "SOVEREIGN_SCHEDULER.md", "SPEC.md",
-    "docs/DOC_AUDIT_FACTS.md", "docs/LIFEOS-FABRIC-LEARNINGS.md",
-    "docs/jev-integration-spec.md", "test_input.txt",
+    "docs/archive/**", "test_input.txt",
 ]
 
 [lib]

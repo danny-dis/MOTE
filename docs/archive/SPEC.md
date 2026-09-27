@@ -1,6 +1,8 @@
 # MOTE Specification
 
-**Conceptual design, not the implemented manifest or an OS security boundary.** The runnable YAML schema is `src/config.rs`; [README.md](README.md) and [docs/STATUS.md](docs/STATUS.md) describe shipped behavior.
+> **Historical design proposal — not current product documentation.** This specification preserves a proposed runtime design and does not establish live health, current behavior, or shipped features. For current MOTE documentation, see [STATUS](../STATUS.md), [BUILDING_ON_MOTE](../BUILDING_ON_MOTE.md), and [QUICKSTART](../QUICKSTART.md).
+
+**Conceptual design, not the implemented manifest or an OS security boundary.** The runnable YAML schema is `src/config.rs`; [README.md](../../README.md) and [docs/STATUS.md](../STATUS.md) describe shipped behavior.
 
 **Minimal Orchestration & Task Execution**
 Version: 0.2 — Minimal Agent Execution Kernel

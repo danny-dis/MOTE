@@ -1,6 +1,8 @@
 # MOTE Engineering Paper
 
-**Design note, not an implementation inventory.** Conceptual AGENT.md loading, extension contracts, remote environments, and isolation described below are targets. The current library/CLI and its limitations are documented in [README.md](README.md) and [docs/STATUS.md](docs/STATUS.md).
+> **Historical design snapshot — not current product documentation.** This paper preserves a proposed architecture and does not establish live health, current behavior, or shipped features. For current MOTE documentation, see [STATUS](../STATUS.md), [BUILDING_ON_MOTE](../BUILDING_ON_MOTE.md), and [QUICKSTART](../QUICKSTART.md).
+
+**Design note, not an implementation inventory.** Conceptual AGENT.md loading, extension contracts, remote environments, and isolation described below are targets. The current library/CLI and its limitations are documented in [README.md](../../README.md) and [docs/STATUS.md](../STATUS.md).
 
 ## Minimal Agent Embodiment Through a Capability-Oriented Runtime
 

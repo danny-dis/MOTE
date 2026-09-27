@@ -25,7 +25,32 @@ MOTE is suitable for **trusted workspaces and trusted operators** when deployed 
 2. Grant only the necessary capabilities. Avoid shell and Git entirely for file-only agents. If shell is essential, prefer narrowly scoped programs and an operator-controlled search path; do not allow interpreters on an untrusted host without OS isolation.
 3. Pin the model endpoint deliberately and review where observations are sent. Protect and rotate provider credentials independently of MOTE; do not put them in manifests. Register custom Rust handlers only from trusted host code; YAML cannot load handlers by itself.
 4. Limit who can edit the manifest, workspace, executable search path, and runtime environment. Do not let an adversary mutate the workspace concurrently.
-5. Restrict access to JSONL logs and reports; treat historical files under `reports/` as samples, never as live health evidence. Arrange external monitoring and backups.
+5. Restrict access to JSONL logs and reports; treat historical reports under `docs/archive/` as samples, never as live health evidence. Arrange external monitoring and backups.
 6. Exercise the agent against the actual model endpoint and deployment environment before enabling unattended runs. Failures, rate limits, and network timeouts must be monitored externally.
 
-Report security issues privately to the repository maintainer; do not post credentials or exploit details in a public issue.
+## Reporting a vulnerability
+
+Do not post exploit details, credentials, or sensitive logs in a public issue.
+Contact the repository maintainer through an existing private channel. If you do
+not have one, open an issue requesting a private security contact **without**
+disclosing the vulnerability. GitHub private vulnerability reporting may not be
+enabled or available; this policy does not assume it is.
+
+Include the affected release/commit, operating system, minimal reproduction,
+security impact, and proposed mitigation. Remove real keys and private user data.
+There is no paid support contract, bug bounty, or guaranteed response deadline.
+
+## Updates and release trust
+
+Use the latest published patch release and review its changelog. MOTE is pre-1.0;
+older releases do not have a promised long-term-support or backport schedule.
+A fix is not available until its release or commit is published.
+
+Release archives are unsigned and macOS binaries are not notarized. Compare the
+archive hash against `SHA256SUMS` from the same trusted GitHub release. A checksum
+checks integrity, not publisher identity; repository/account compromise can affect
+both files. Do not disable system-wide security protections to run a download.
+
+SDK timeouts terminate the bridge, not necessarily its descendant processes or
+application callbacks. Isolate or bound host code separately. Auth credentials are
+read from the variable named by `auth_env`; never commit its value to YAML.

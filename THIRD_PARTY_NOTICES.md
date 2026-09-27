@@ -1,10 +1,18 @@
 # Third-party dependency inventory (source release)
 
-This inventory is derived from the 90 registry packages in `Cargo.lock` for `mote-agent` 0.13.0. The license expressions below are transcribed from each exact-version crate's `Cargo.toml` in the local Cargo registry; they describe the crates' declared licensing options, **not** a determination of copyright ownership or of which option was exercised. In particular, `OR`, `AND`, `WITH`, and the legacy `MIT/Apache-2.0` spelling are intentionally preserved. The remaining lockfile entry is the root `mote-agent` package, not a third-party crate.
+This inventory is derived from the 90 registry packages in `Cargo.lock` for `mote-agent` 0.13.1. The license expressions below are transcribed from each exact-version crate's `Cargo.toml` in the local Cargo registry; they describe the crates' declared licensing options, **not** a determination of copyright ownership or of which option was exercised. In particular, `OR`, `AND`, `WITH`, and the legacy `MIT/Apache-2.0` spelling are intentionally preserved. The remaining lockfile entry is the root `mote-agent` package, not a third-party crate.
 
 A source-only `cargo package --list --allow-dirty --offline` lists the project files, including `Cargo.lock` and the project's MIT `LICENSE`, but no vendored dependency source or binary. Merely listing a dependency in the lockfile does not redistribute its code. This inventory is informative, rather than a substitute for the license texts, copyright notices, and any upstream `NOTICE` files that must accompany *actually redistributed* third-party works. Include this file in a source release by re-running `cargo package --list --allow-dirty --offline` after adding it.
 
 For a binary or vendored-source release, review its actual target-specific build and payload, then include the applicable upstream license texts and copyright/attribution notices. MIT requires its copyright and permission notice in copies or substantial portions; Unicode-3.0 requires its copyright and permission notice with copies or in associated documentation; Apache-2.0 requires a copy of the license and, where an upstream work has a `NOTICE` file, its applicable attribution notices, as well as the other conditions in section 4.[3][2][1] This inventory **alone is not a complete binary/vendored-source notice bundle**. In particular, `openssl` 0.10.81 is declared **Apache-2.0 only** (not MIT); `unicode-ident` requires Unicode-3.0 **in addition to** a choice between MIT and Apache-2.0; and ICU4X crates below declare Unicode-3.0. The Rust `openssl` crate is distinct from the native OpenSSL library: check separately whether a particular binary distribution includes any native OpenSSL library and its applicable notices. A platform's system TLS library is not automatically bundled with the application.
+
+## Binary distribution notices
+
+Official binary archives additionally contain `THIRD_PARTY_LICENSES.txt` with
+verbatim dependency licenses/notices and `RUST_COPYRIGHT.html` from the installed
+Rust toolchain. These are collected for each build target by `scripts/licenses.py`.
+Do not replace that bundle with this summary when redistributing binaries. See
+[Releasing](docs/RELEASING.md) for the packaging process.
 
 ## Locked registry packages
 

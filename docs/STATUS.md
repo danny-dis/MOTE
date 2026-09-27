@@ -1,13 +1,41 @@
-# MOTE 0.13.0 status
+# Current product status
 
-MOTE (`mote-agent` Cargo package, `mote` Rust import) is a Rust library and CLI for bounded, trusted-workspace agent tasks. The YAML manifest selects a model chain, workspace, and explicit capabilities; no capability is granted by default. The CLI supports post-run `--jsonl` lifecycle events. Built-in actions are `shell`, `read_file`, `write_file`, `list_dir`, `git`, optional typed `decision`, and `complete`. Rust hosts may register named custom handlers and grant them in a trusted manifest; YAML alone cannot load handlers.
+MOTE provides a Rust library/CLI, a stdio bridge, thin Python/TypeScript SDKs, and a
+Rust application starter. The current source line is **0.13.1**; use the
+[changelog](../CHANGELOG.md) and [release page](https://github.com/danny-dis/MOTE/releases)
+for version-specific changes and published downloads.
 
-**Implemented:** workspace checks for built-in file actions; allowlisted executable/limited Git modes; iteration, runtime, command, response-size and per-tool limits (`max_per_tool`, default 5 physical calls per action type); bounded retries for transient `read_file` and `list_dir` failures only; model fallback and one empty-response retry; cancellation and fail-closed decision fallback. `max_output_bytes` (default 65,536; allowed 1–1,048,576) bounds shell output and rejects oversized file and directory observations before they enter prompts or events. A successful explicit write to `output_file` completes the run. A `complete:` summary writes a fresh report (replacing an older report); a failed write fails the run rather than treating stale content as new output. Shell, Git and writes are never auto-retried.
+## Available
 
-**Reliability hardening:** HTTP models prefer lossless JSON actions while retaining legacy action-line compatibility. Explicitly unfinished provider responses are rejected. Runtime prompts include actual grants, budgets, output path and labeled completed action/results. Completion reports go through the normal write capability and count against its budget. `scripts/live_smoke.py` provides opt-in real-provider tests with independently checked artifacts; CI remains deterministic and does not prove provider availability.
+- YAML manifests with explicit grants, workspace configuration, model chains, and limits.
+- Built-in file/directory actions, restricted shell/Git modes, and optional typed decisions.
+- Registered Rust handlers and Python/TypeScript host callbacks through protocol v1.
+- Model fallback, empty-response retry, unfinished-response rejection, and lossless JSON actions.
+- Runtime/tool/observation budgets, cancellation hooks, and completion-write accounting.
+- CLI post-run JSONL and SDK terminal events.
+- Source-installable SDK packages and a starter that checks callbacks and output artifacts.
+- Automated Windows x64, Linux x64, and macOS Apple Silicon binary distributions,
+  extracted-archive checks, checksums, and license bundles.
 
-**Application integrations:** the separate `mote-bridge` binary provides a versioned stdio protocol for Python/TypeScript host callbacks. Source-installable SDKs live in `sdk/python` and `sdk/typescript`; they are not registry releases. The bridge reuses the existing capability checks without granting tools implicitly. `starters/rust-agent` embeds the public Rust API with a real HTTP model adapter, a custom tool, and an independent output check. See [building on MOTE](BUILDING_ON_MOTE.md) and the [bridge contract](BRIDGE_PROTOCOL.md). Callback code runs with host privileges, not in a sandbox. No HTTP service or new Rust runtime dependency is required.
+## Not included
 
-**Not implemented or not verified:** OS sandboxing, guaranteed termination of child processes or blocked network calls, independent authorization/policy service, AGENT.md loader, dynamic plug-in loading/ABI, installed scheduler, WhatsApp alert routing, or live reliability across remote providers. Executables and Git run with the invoking user's permissions and may access network, host files, and secrets outside the workspace. JSONL observations are sent to the model endpoint; do not run on sensitive data without isolation and log review.
+- An AI model, provider account, hosted inference service, or guaranteed provider uptime.
+- OS sandboxing, multi-tenant authorization, or guaranteed descendant-process termination.
+- A GUI, installed scheduler, memory/database service, browser, or MCP server.
+- Dynamic plug-in loading, an `AGENT.md` loader, or live runtime-event streaming.
+- Published npm/PyPI packages, signed/notarized binaries, or prebuilt Intel Mac downloads.
 
-The source package includes LICENSE, SECURITY.md, the third-party inventory, runnable examples, and specs. Local checks do not prove an exact commit passed GitHub CI; verify the CI run for the final commit before release. The example endpoints are not proof those services are running. `run-agent.sh` is an optional wrapper for an external scheduler; it does not schedule tasks itself.
+## Verification and interpretation
+
+Cross-platform CI exercises runtime regression tests, SDK subprocess/callback tests,
+source packaging, examples, starter, formatting, linting, and dependency auditing.
+Release jobs run both SDK suites against extracted release bridges. Model responses
+in deterministic integration tests are scripted fixtures, not external provider calls.
+
+Live provider tests are opt-in and environment-dependent. A completed task or green
+CI does not prove the semantic correctness of arbitrary model-generated outputs or
+that an external endpoint is available. Your application must validate accepted results.
+
+The v0.13.0 downloadable example used an invalid `api_key_env` field; 0.13.1 corrects
+it to `auth_env` and tests the release manifest. This does not alter the bridge protocol.
+See [Security](../SECURITY.md) before deploying unattended workloads.

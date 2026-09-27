@@ -1,5 +1,7 @@
 # LifeOS + Fabric Learnings for MOTE
 
+> **Historical design-notes snapshot — not current product documentation.** This file preserves historical proposals and does not establish live health, current behavior, or shipped features. For current MOTE documentation, see [STATUS](../STATUS.md), [BUILDING_ON_MOTE](../BUILDING_ON_MOTE.md), and [QUICKSTART](../QUICKSTART.md).
+
 MOTE remains a small agent substrate. It should borrow the reusable capability philosophy from Fabric and the adaptive execution discipline from LifeOS without becoming a large personal-AI framework.
 
 ## Agent capability contracts

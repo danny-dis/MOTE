@@ -43,17 +43,22 @@ Open a terminal in the extracted directory:
 
 Edit `agent.yaml` with your provider's OpenAI-compatible **chat completions**
 endpoint and model name. The example defaults to a local server, not a bundled model.
-If authentication is required, set the environment variable named in `api_key_env`
-(`MOTE_API_KEY`) before running. Never put the key into YAML or commit it.
+If authentication is required, set the environment variable named in `auth_env`
+(`MOTE_API_KEY`) before running. For a keyless local server, remove `auth_env`
+from the manifest. Never put the key into YAML or commit it.
 Put only the files you want the agent to read in `workspace`.
 
 ```powershell
-.\mote.exe agent.yaml "List the workspace files and summarize them"
+.\mote.exe --jsonl agent.yaml "List the workspace files and summarize them"
 ```
 
 ```sh
-./mote agent.yaml "List the workspace files and summarize them"
+./mote --jsonl agent.yaml "List the workspace files and summarize them"
 ```
+
+`--jsonl` displays the tool observations and lifecycle events after the run ends;
+it is not a live stream. Without it, the CLI prints only the final state and event
+count, not a chat-style answer. Treat event output as potentially sensitive.
 
 The example grants only `list_dir` and `read_file`; it cannot write or run shell
 commands. Permission checks are not an OS sandbox. Use trusted workspaces and
