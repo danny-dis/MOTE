@@ -1,0 +1,10 @@
+name: release-example
+workspace: ./workspace
+capabilities: [list_dir, read_file]
+max_iterations: 8
+max_runtime_seconds: 120
+models:
+  - provider: openai-compatible
+    model: your-model-name
+    endpoint: http://127.0.0.1:8080/v1/chat/completions
+    api_key_env: MOTE_API_KEY

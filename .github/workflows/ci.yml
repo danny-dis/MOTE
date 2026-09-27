@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [production-ready]
   pull_request:
@@ -41,6 +42,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Release tooling tests
+        run: python -m unittest discover -s scripts/tests -v
       - name: Python SDK and real bridge integration
         shell: bash
         env:

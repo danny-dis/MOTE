@@ -86,6 +86,16 @@ Maintain this repository and keep changes aligned with its engineering standards
 
 The current CLI reads YAML manifests. `AGENT.md` and external authorization/policy integration remain design goals, not implemented security controls.
 
+## Downloads
+
+Download prebuilt Windows x64, Linux x64, and macOS Apple Silicon binaries from
+[GitHub Releases](https://github.com/danny-dis/MOTE/releases/latest). Each archive
+contains the CLI, SDK bridge, example configuration, quick-start, and licenses.
+See [binary quick-start](docs/QUICKSTART.md) for requirements and checksum checks.
+Repository access is required while MOTE is private.
+
+Releases are automatic on matching version tags; see [release procedure](docs/RELEASING.md).
+
 ## Building on MOTE
 
 Start with the [application-building guide](docs/BUILDING_ON_MOTE.md):

@@ -1,0 +1,190 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Require matching stable version on production-ready
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python -c 'import os; from pathlib import Path; from scripts.release import check_tag; check_tag(Path("."), os.environ["RELEASE_TAG"])'
+          git merge-base --is-ancestor HEAD origin/production-ready
+      - name: Test release tooling
+        run: python -m unittest discover -s scripts/tests -v
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+
+  binaries:
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            rustflags: '-C target-feature=+crt-static'
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            rustflags: ''
+          - os: macos-14
+            target: aarch64-apple-darwin
+            rustflags: ''
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Build distributable binaries
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+          TARGET: ${{ matrix.target }}
+        run: cargo build --locked --release --bins --target "$TARGET"
+      - name: Collect upstream license and copyright texts
+        env:
+          TARGET: ${{ matrix.target }}
+        run: python scripts/licenses.py --target "$TARGET" --output "target/$TARGET/release"
+      - name: Package and extract the exact distribution
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          python - <<'PY'
+          import os, shutil, subprocess
+          from pathlib import Path
+          from scripts.release import package
+          root = Path.cwd()
+          target, tag = os.environ['TARGET'], os.environ['RELEASE_TAG']
+          output = Path(os.environ['RUNNER_TEMP']) / 'release-assets'
+          archive = package(root, root / 'target' / target / 'release', output, target, tag)
+          extracted = Path(os.environ['RUNNER_TEMP']) / 'release-smoke'
+          shutil.unpack_archive(str(archive), str(extracted))
+          binary = extracted / f'mote-{tag}-{target}'
+          suffix = '.exe' if 'windows' in target else ''
+          result = subprocess.run([str(binary / ('mote' + suffix)), '--version'], check=True, capture_output=True, text=True, timeout=10)
+          assert result.stdout.strip() == 'mote ' + tag[1:], result.stdout
+          subprocess.run([str(binary / ('mote' + suffix)), '--help'], check=True, timeout=10)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write('MOTE_BRIDGE=' + str(binary / ('mote-bridge' + suffix)) + '\n')
+          PY
+      - name: Exercise extracted bridge with both SDKs
+        run: |
+          python -m pip install './sdk/python[test]'
+          python -m pytest sdk/python/tests -q
+          npm --prefix sdk/typescript ci
+          npm --prefix sdk/typescript test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ runner.temp }}/release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: binaries
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify complete asset set and assemble checksums
+        run: |
+          python -c 'import os; from pathlib import Path; from scripts.release import assemble; assemble(Path("."), Path("release-assets"), os.environ["RELEASE_TAG"])'
+      - name: Upload to draft, verify assets, then publish
+        shell: bash
+        run: |
+          if ! gh release view "$RELEASE_TAG" --json isDraft,tagName,targetCommitish > "$RUNNER_TEMP/release-state.json" 2>/dev/null; then
+            gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" --title "MOTE $RELEASE_TAG" --draft --prerelease=false --generate-notes --notes-file docs/RELEASE_NOTES.md
+            gh release view "$RELEASE_TAG" --json isDraft,tagName,targetCommitish > "$RUNNER_TEMP/release-state.json"
+          fi
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          release = json.loads((Path(os.environ["RUNNER_TEMP"]) / "release-state.json").read_text())
+          assert release["isDraft"] is True, "Refusing to overwrite a published release"
+          assert release["tagName"] == os.environ["RELEASE_TAG"], release
+          assert release["targetCommitish"] == os.environ["GITHUB_SHA"], release
+          PY
+          assets=(release-assets/*.zip release-assets/*.tar.gz release-assets/SHA256SUMS)
+          gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          gh release view "$RELEASE_TAG" --json assets > "$RUNNER_TEMP/uploaded-assets.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          local = {p.name: p.stat().st_size for p in Path('release-assets').iterdir() if not p.name.endswith('.sha256')}
+          remote = {a['name']: a['size'] for a in json.loads((Path(os.environ['RUNNER_TEMP']) / 'uploaded-assets.json').read_text())['assets']}
+          assert local == remote, (local, remote)
+          PY
+          python - <<'PY'
+          import os
+          import subprocess
+
+          tag = os.environ["RELEASE_TAG"]
+          expected = os.environ["GITHUB_SHA"].lower()
+          refs = subprocess.run(
+              ["git", "ls-remote", "origin", f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.splitlines()
+          resolved = None
+          for line in refs:
+              sha, ref = line.split("\t", 1)
+              if ref == f"refs/tags/{tag}^{{}}":
+                  resolved = sha.lower()
+                  break
+              if ref == f"refs/tags/{tag}":
+                  resolved = sha.lower()
+          assert resolved == expected, (tag, resolved, expected)
+          PY
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
+          git ls-remote origin "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" > "$RUNNER_TEMP/published-tag.txt"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          tag = 'refs/tags/' + os.environ['RELEASE_TAG']
+          refs = dict(line.split('\t', 1)[::-1] for line in (Path(os.environ['RUNNER_TEMP']) / 'published-tag.txt').read_text().splitlines())
+          assert refs.get(tag + '^{}', refs.get(tag)) == os.environ['GITHUB_SHA'], 'Published tag changed: investigate release integrity'
+          PY
+          gh release view "$RELEASE_TAG" --json url,isDraft,tagName,assets
