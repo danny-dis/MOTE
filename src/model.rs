@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::str::FromStr;
 use std::time::Duration;
 
-const SYSTEM_PROMPT: &str = "You are MOTE. Respond with exactly one action line: shell: <command>, read_file: <path>, write_file: <path> | <content>, list_dir: <path>, git: <args>, decision: <json>, custom: <registered-name> | <JSON object>, or complete: <summary>. Use custom only when the task names a host-registered, granted tool. Choose the single simplest permitted action.";
+const SYSTEM_PROMPT: &str = r#"You are MOTE. Return exactly one JSON action object, without markdown or explanation. Action shapes: {"action":"read_file","path":"file.txt"}, {"action":"write_file","path":"file.txt","content":"exact file content"}, {"action":"list_dir","path":"."}, {"action":"shell","command":"program args"}, {"action":"git","args":"status"}, {"action":"decision","request":{}}, {"action":"custom","name":"registered_name","input":{}}, {"action":"complete","summary":"done"}. Use only the capabilities granted in runtime settings. Use custom/decision only when the task describes their input contract. Tool results in the task are completed actions: use their observations, do not restart those steps. Preserve file content exactly using JSON string escapes for whitespace. Choose the simplest NEXT permitted action."#;
 
 pub trait Model: Send + Sync {
     fn infer(&self, prompt: &str) -> Result<Action, String>;
@@ -187,6 +187,23 @@ impl HttpModel {
 impl Model for HttpModel {
     fn infer(&self, prompt: &str) -> Result<Action, String> {
         let value = self.request(prompt)?;
+        // Some compatible endpoints omit this metadata. When present, only
+        // normal text completion is safe to execute (never a partial write).
+        let (reason, complete) = match self.provider {
+            Provider::Gemini => (value.pointer("/candidates/0/finishReason"), &["STOP"][..]),
+            Provider::Anthropic => (value.get("stop_reason"), &["end_turn", "stop_sequence"][..]),
+            Provider::OpenAiCompatible | Provider::DmrX => {
+                (value.pointer("/choices/0/finish_reason"), &["stop"][..])
+            }
+        };
+        if let Some(reason) = reason {
+            if !reason
+                .as_str()
+                .is_some_and(|reason| complete.contains(&reason))
+            {
+                return Err(format!("incomplete provider response: {reason}"));
+            }
+        }
         let content = match self.provider {
             Provider::Gemini => value.pointer("/candidates/0/content/parts/0/text"),
             Provider::Anthropic => value.pointer("/content/0/text"),
@@ -201,12 +218,15 @@ impl Model for HttpModel {
 }
 
 pub fn parse_action(content: &str) -> Result<Action, String> {
-    let text = content.trim();
-    if text.is_empty() {
+    let text = content.trim_start();
+    if text.trim().is_empty() {
         return Err("action payload is empty".to_owned());
     }
-    let (kind, rest) = text.split_once(':').ok_or("invalid action")?;
-    let rest = rest.trim();
+    if text.starts_with('{') {
+        return serde_json::from_str(text).map_err(|error| format!("invalid JSON action: {error}"));
+    }
+    let (kind, payload) = text.split_once(':').ok_or("invalid action")?;
+    let rest = payload.trim();
     if rest.is_empty() {
         return Err("action payload is empty".to_owned());
     }
@@ -221,12 +241,14 @@ pub fn parse_action(content: &str) -> Result<Action, String> {
             path: rest.to_owned(),
         }),
         "write_file" => {
-            let (path, content) = rest
+            let (path, content) = payload
                 .split_once('|')
                 .ok_or("write_file requires: path | content")?;
             Ok(Action::WriteFile {
                 path: path.trim().to_owned(),
-                content: content.trim().to_owned(),
+                // One optional ASCII space belongs to the legacy delimiter.
+                // Every following byte belongs to the file, including newlines.
+                content: content.strip_prefix(' ').unwrap_or(content).to_owned(),
             })
         }
         "list_dir" => Ok(Action::ListDir {

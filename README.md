@@ -169,6 +169,42 @@ MOTE is a **library/CLI kernel**, not a hosted agent service or security sandbox
 
 The embedding application owns scheduling, persistence, user authentication, credential storage, monitoring, and restart/retry policy. MOTE provides bounded individual runs and events, not a durable job queue. Exercise the real model endpoint and the target OS/environment before promoting an agent to production; the keyless example and CI do not test a provider's availability. This pre-1.0 Rust API may change in a minor release; pin a compatible crate version and test upgrades.
 
+## Verification and action protocol
+
+Run `cargo test --locked --all-targets`, `cargo test --locked --release --all-targets`,
+`cargo fmt --check`, and `cargo clippy --locked --all-targets -- -D warnings` for deterministic checks.
+For opt-in **real model** verification, build the release binary and run:
+
+```bash
+python scripts/live_smoke.py --binary target/release/mote --output smoke-results
+# Windows: --binary target/release/mote.exe
+```
+
+The stdlib-only smoke runner uses synthetic temporary workspaces through a local
+DMR-X endpoint by default. It checks CSV aggregation, exact whitespace/Unicode
+copying, and configuration edits, three times each. It independently validates
+all output files, retains every attempt in a new evidence directory, and exits
+nonzero if any task fails. `--endpoint`, `--model`, and `--auth-env` select another
+provider; the endpoint receives the synthetic inputs. It is not run by CI and
+makes no claim that all providers or workloads are reliable.
+
+HTTP models are prompted for one JSON action, for example
+`{"action":"write_file","path":"report.txt","content":"    indented\n"}`
+(with the newline escaped in the JSON string). This uses the existing `Action`
+serialization format and preserves content exactly, including empty files.
+Legacy `write_file: path | content` remains accepted: at most one ASCII space
+immediately after `|` is a separator; all subsequent whitespace is file content.
+Other legacy action lines remain supported. Responses explicitly marked
+truncated, filtered, or otherwise unfinished are rejected before execution;
+compatible endpoints that omit completion metadata remain supported.
+
+Each model turn receives granted capability names, the per-tool budget, the
+output path, and labeled results of completed actions. A completion summary
+written to `output_file` uses the same permission, budget and event path as an
+explicit `write_file`. `Completed` means execution finished, not that an arbitrary
+artifact is semantically correct; the embedding application must still validate
+its own acceptance criteria.
+
 ## License
 
 MIT. See [LICENSE](LICENSE). You may build and distribute agents on top of MOTE under the terms of that license. Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md) when distributing a bundled binary.
