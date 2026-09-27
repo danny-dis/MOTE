@@ -8,7 +8,7 @@ runtime.
 Requirements: Python 3.10 or newer (`requires-python = ">=3.10"`). A Rust
 toolchain is not required when you use a downloaded bridge executable. The
 bridge is available in the [GitHub Releases](https://github.com/danny-dis/MOTE/releases)
-archives; this repository is private, so you need repository access. Release
+archives. Source and downloads are public; no GitHub account is needed. Release
 binaries are unsigned/not notarized. Verify the archive checksum, expect an OS
 warning where applicable, and do not treat a checksum as publisher identity.
 See the repository [QUICKSTART](../../docs/QUICKSTART.md) for platform assets

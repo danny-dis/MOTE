@@ -7,7 +7,7 @@ private, and it is not published to npm. It has no runtime npm dependencies.
 Requirements: Node.js 20 or newer (`engines.node = ">=20"`). A Rust toolchain
 is not required when you use a downloaded bridge executable. The bridge is
 available in the [GitHub Releases](https://github.com/danny-dis/MOTE/releases)
-archives; this repository is private, so GitHub repository access is required.
+archives. Source and downloads are public; no GitHub account is needed.
 Release binaries are unsigned/not notarized. Verify archive checksums and
 expect an OS warning where applicable. See [QUICKSTART](../../docs/QUICKSTART.md)
 for release assets and extraction instructions.

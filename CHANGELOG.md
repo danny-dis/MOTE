@@ -3,6 +3,14 @@
 This file records user-facing changes. Git tags identify source and binary releases.
 SDK package versions and the bridge protocol are versioned separately.
 
+## Unreleased
+
+- Consolidated documentation around the README, quick-start, architecture, and changelog.
+- Removed obsolete proposals, audit snapshots, and sample reports from the current tree;
+  prior versions remain in Git history.
+- Public source and download links replace private-access instructions.
+- Release notes are generated from the tagged version's changelog section.
+
 ## 0.13.1
 
 ### Fixed

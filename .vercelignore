@@ -1,0 +1,5 @@
+*
+!site
+!site/public
+!site/public/**
+!site/vercel.json

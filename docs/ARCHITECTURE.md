@@ -66,5 +66,24 @@ granted by the trusted manifest. The bridge carries data, not dynamically loaded
 - Deterministic tests check mechanics. Live model responses and business outcomes
   require separate checks in the intended deployment.
 
-Read [Security](../SECURITY.md) and [Design principles](../DESIGN_PRINCIPLES.md) before
-adding capabilities or using MOTE with untrusted content.
+Read [Security](../SECURITY.md) before adding capabilities or using untrusted content.
+
+## Design principles
+
+Keep a small, stable execution kernel. **YAGNI** (You Aren't Gonna Need It) means
+not adding functionality for hypothetical future consumers. It does not mean
+avoiding architecture that current users already need.
+
+- Add the smallest extension contract justified by a real application. Prefer
+  narrow protocols over provider-specific knowledge in the kernel.
+- Keep specialized integrations and deployment behavior in application code.
+  Components should be replaceable without restructuring the execution loop.
+- Put deterministic checks around probabilistic model proposals: named grants,
+  workspace validation, observations, and budgets are mechanics, not an OS sandbox.
+- Do not postpone security boundaries required by the threat model, data-loss
+  protection, or stable interfaces already consumed by other systems.
+- Treat YAGNI as an engineering and review criterion, not a runtime capability.
+
+Before adding a core feature, identify the current task it enables, why an
+application tool cannot supply it, what complexity it removes, and its dependency,
+security, and maintenance costs. If there is no concrete consumer, defer it.

@@ -9,114 +9,85 @@
 MOTE — **Minimal Orchestration & Task Execution** — is a Rust library and command-line
 program. It asks a model for the next action, checks the configured capabilities,
 executes a tool, and feeds the result back until the task finishes or a limit is reached.
+Your application owns the interface, users, approvals, storage, scheduling, and output validation.
 
-Use it to build a focused document worker, repository assistant, or application-specific
-agent without adopting a full agent platform. Your application owns the interface,
-users, approvals, storage, scheduling, and acceptance checks.
-
+[Website](https://mote-runtime.vercel.app) ·
 [Download](https://github.com/danny-dis/MOTE/releases/latest) ·
-[Quick start](docs/QUICKSTART.md) · [Documentation](docs/README.md) ·
-[Build an application](docs/BUILDING_ON_MOTE.md) · [Changelog](CHANGELOG.md)
+[Quick start](docs/QUICKSTART.md) · [Documentation](#documentation) · [Changelog](CHANGELOG.md)
 
-> MOTE is for trusted workspaces and trusted operators. Capability checks are **not an
-> OS sandbox**. Connect your own model/provider; no model, account, or API key is bundled.
-> The repository is currently private, so source and downloads require access.
-
-## Choose your starting point
-
-| You want to… | Start here |
-|---|---|
-| Run a task without installing Rust | [Download and run the CLI](docs/QUICKSTART.md) |
-| Use Python functions as agent tools | [Python SDK](sdk/python/README.md) |
-| Use JavaScript/TypeScript functions as tools | [TypeScript SDK](sdk/typescript/README.md) |
-| Embed the engine directly in Rust | [Rust application starter](starters/rust-agent/README.md) |
-| Configure models, permissions, and limits | [Configuration reference](docs/CONFIGURATION.md) |
-| Contribute or build from source | [Contributing](CONTRIBUTING.md) |
+> Source and downloads are public. Bring your own model and credentials.
+> Capability checks are **not an OS sandbox**: use trusted workspaces and operators.
 
 ## Download and run
 
 Get the archive for your computer from [Releases](https://github.com/danny-dis/MOTE/releases/latest):
 
 - **Windows x64:** ZIP containing `mote.exe` and `mote-bridge.exe`.
-- **Linux x64:** tar.gz; Ubuntu 22.04 or compatible newer system with OpenSSL 3 and CA certificates.
-- **macOS Apple Silicon:** tar.gz; macOS 14 or newer. Intel Macs currently require a source build.
+- **Linux x64:** tar.gz; Ubuntu 22.04-compatible system with OpenSSL 3 and CA certificates.
+- **macOS Apple Silicon:** tar.gz; macOS 14 or newer. Other architectures require a source build.
 
-Verify its checksum, extract it, and open a terminal in the extracted directory.
-On Windows PowerShell:
-
-```powershell
-.\mote.exe --version
-.\mote.exe --help
-```
-
-On Linux/macOS:
+No Rust installation is needed for the binaries. Verify the checksum and extract the
+archive. Follow the [quick start](docs/QUICKSTART.md) to configure `agent.yaml`, select
+a reachable model endpoint, and set the environment variable named by `auth_env`.
+For a keyless local model, remove `auth_env`. Put a non-sensitive file in `workspace`, then run:
 
 ```sh
-./mote --version
-./mote --help
+./mote --jsonl agent.yaml "List the workspace files and summarize them"
 ```
 
-Edit the included `agent.yaml` to select your model endpoint and model name. Set the
-credential environment variable named by `auth_env`, or remove that field for a
-keyless local server. Put a small, non-sensitive file in `workspace`, then run:
-
-```sh
-./mote agent.yaml "List the workspace files and summarize them"
-```
-
-On Windows use `.\mote.exe` in place of `./mote`. The example grants only directory
-listing and file reads. Follow the [full quick start](docs/QUICKSTART.md) for setup,
-authentication, and troubleshooting. Binaries are currently unsigned/not notarized.
+On Windows PowerShell, replace `./mote` with `.\mote.exe`.
+The example grants only directory listing and file reads. JSONL events arrive after
+the run; without `--jsonl`, the CLI prints final state and event count, not a chat answer.
+Binaries are unsigned/not notarized; checksums verify integrity, not publisher identity.
 
 ## What is included
 
-- **Rust runtime and CLI:** YAML configuration, explicit capability grants, model
-  fallback, run/tool limits, cancellation hooks, and post-run JSONL events.
+- **Rust library and CLI:** YAML configuration, capability grants, model fallback,
+  run/tool/observation limits, cancellation hooks, and post-run events.
 - **Built-in tools:** file reads/writes, directory listing, restricted shell/Git modes,
-  and optional typed decisions. Tool access is opt-in.
-- **Custom tools:** application-owned Rust handlers, or Python/TypeScript callbacks
-  through the separate `mote-bridge` process.
-- **Thin SDKs:** source-installable packages with no third-party runtime dependencies.
-- **Verified distributions:** automated cross-platform checks, extracted-archive
-  integration tests, SHA-256 checksums, and upstream license notices.
+  and optional typed decisions. Access is opt-in.
+- **Application-owned tools:** Rust handlers or Python/TypeScript callbacks through
+  the separate `mote-bridge` process. Registration does not grant permission.
+- **Thin SDKs and a Rust starter:** no third-party SDK runtime dependencies.
+- **Tested distributions:** cross-platform CI, extracted-archive integration tests,
+  SHA-256 checksums, and bundled dependency license notices.
 
-The Rust package is `mote-agent`; its library import is `mote`. The unrelated `mote`
-package on crates.io is **not this project**. These SDKs are not published to npm/PyPI.
+The Rust package is `mote-agent`, imported as `mote`; the unrelated `mote` package
+on crates.io is **not this project**. Python/TypeScript SDKs install from source,
+not npm/PyPI. Use source and SDKs matching your installed release.
 
-## What MOTE deliberately does not provide
+## What MOTE does not provide
 
-A chat UI, model hosting, database, scheduler, browser, MCP server, multi-user access
-control, or sandbox. An `AGENT.md` file does not configure this runtime; the CLI reads
-YAML. Tool callbacks are interactive, but runtime events arrive after the run, not as
-live progress. A completed run is not proof its generated answer or file is correct.
+A bundled model, hosted inference, GUI, database/memory service, scheduler, browser,
+MCP server, multi-user access control, dynamically loaded plugins, or OS sandbox.
+`AGENT.md` does not configure the runtime; the CLI reads YAML.
 
-See [current status](docs/STATUS.md), [architecture](docs/ARCHITECTURE.md), and
-[security boundaries](SECURITY.md) before deploying unattended agents.
+Tool callbacks are interactive, but runtime events are buffered until the run ends.
+Timeouts do not guarantee termination of all descendant processes or blocking host callbacks.
+A completed run or green CI does not prove model-output correctness or provider availability.
+Deterministic tests use scripted model responses; validate real outputs in your deployment.
 
-## Development and releases
+## Documentation
 
-From a source checkout with stable Rust and the platform's Rust build prerequisites:
+- **Use:** [Quick start and troubleshooting](docs/QUICKSTART.md) ·
+  [Configuration reference](docs/CONFIGURATION.md).
+- **Build:** [Choose an integration](docs/BUILDING_ON_MOTE.md) ·
+  [Python SDK](sdk/python/README.md) · [TypeScript SDK](sdk/typescript/README.md) ·
+  [Rust starter](starters/rust-agent/README.md).
+- **Understand:** [Architecture and design principles](docs/ARCHITECTURE.md) ·
+  [Bridge protocol](docs/BRIDGE_PROTOCOL.md) · [Security](SECURITY.md).
+- **Maintain:** [Contributing and support](CONTRIBUTING.md) ·
+  [Release procedure](docs/RELEASING.md) · [Changelog](CHANGELOG.md).
 
-```sh
-cargo build --locked --release --bins
-cargo test --locked --all-targets
-cargo run --locked --example custom_tool
-```
-
-The examples use deterministic models and do not need a provider account.
-See [Contributing](CONTRIBUTING.md) for the full verification commands.
-
-Pushing a stable version tag matching `Cargo.toml` triggers the
-[automatic release workflow](docs/RELEASING.md). It tests before publishing; maintainers
-still choose and tag each version. There is no automatic release on every commit.
+Source docs follow `production-ready`. For an installed release, use the matching Git
+tag and bundled quick-start. SDK package and bridge protocol versions are independent
+of the Rust crate version. Maintainers choose version tags; ordinary commits do not
+publish binary releases.
 
 ## Community and license
 
-[Report a bug](https://github.com/danny-dis/MOTE/issues/new/choose) ·
-[Support](SUPPORT.md) · [Security reporting](SECURITY.md#reporting-a-vulnerability) ·
-[Design principles](DESIGN_PRINCIPLES.md)
+[Report a bug or ask a question](https://github.com/danny-dis/MOTE/issues/new/choose) ·
+[Security reporting](SECURITY.md#reporting-a-vulnerability)
 
 MOTE is [MIT licensed](LICENSE). Binary archives include dependency license texts and
 Rust standard-library notices; see [third-party notices](THIRD_PARTY_NOTICES.md).
-Historical proposals and sample reports are preserved in [the archive](docs/archive/README.md),
-not presented as shipped features.

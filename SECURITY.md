@@ -25,7 +25,7 @@ MOTE is suitable for **trusted workspaces and trusted operators** when deployed 
 2. Grant only the necessary capabilities. Avoid shell and Git entirely for file-only agents. If shell is essential, prefer narrowly scoped programs and an operator-controlled search path; do not allow interpreters on an untrusted host without OS isolation.
 3. Pin the model endpoint deliberately and review where observations are sent. Protect and rotate provider credentials independently of MOTE; do not put them in manifests. Register custom Rust handlers only from trusted host code; YAML cannot load handlers by itself.
 4. Limit who can edit the manifest, workspace, executable search path, and runtime environment. Do not let an adversary mutate the workspace concurrently.
-5. Restrict access to JSONL logs and reports; treat historical reports under `docs/archive/` as samples, never as live health evidence. Arrange external monitoring and backups.
+5. Restrict access to JSONL logs and reports. Verify report freshness and content; sample or historical reports are not live health evidence. Arrange external monitoring and backups.
 6. Exercise the agent against the actual model endpoint and deployment environment before enabling unattended runs. Failures, rate limits, and network timeouts must be monitored externally.
 
 ## Reporting a vulnerability

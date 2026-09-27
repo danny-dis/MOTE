@@ -3,3 +3,5 @@
 *.lock
 !Cargo.lock
 *-latest.md
+.vercel
+.env*

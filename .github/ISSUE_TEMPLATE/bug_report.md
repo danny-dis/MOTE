@@ -25,5 +25,5 @@ prove output correctness; show the mismatched artifact if safe to share.
 
 ## Checks
 - [ ] I removed credentials, private data, and sensitive logs.
-- [ ] I checked SUPPORT.md and existing issues.
+- [ ] I checked docs/QUICKSTART.md troubleshooting and existing issues.
 - [ ] This is not a private security report (see SECURITY.md).

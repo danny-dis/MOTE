@@ -9,7 +9,9 @@ invent version numbers.
 
 1. Update `Cargo.toml` and both lockfiles (`Cargo.lock` and
    `starters/rust-agent/Cargo.lock`) when changing the crate version. Update docs
-   and `docs/RELEASE_NOTES.md` if needed. Commit and push to `production-ready`.
+   and add a non-empty `## MAJOR.MINOR.PATCH` section to `CHANGELOG.md`. The workflow
+   extracts that section for the GitHub release; missing or empty notes block publication.
+   Commit and push to `production-ready`.
 2. Ensure the working tree is clean and up to date.
 3. Create and push an annotated version tag matching the new `Cargo.toml` version.
    The following example assumes an unreleased `0.13.2`; substitute your new version:
@@ -44,18 +46,18 @@ fix on `production-ready`, increment the version, and create a new tag rather th
 moving an existing release tag. Do not delete archives to hide a failed release.
 
 The workflow deliberately does not publish to package registries, sign/notarize
-binaries, or change repository visibility. Private repository releases require
-repository access. Checksums detect corruption; they are not code signatures.
+binaries, or change repository visibility. Source and releases are currently public.
+Checksums detect corruption; they are not code signatures.
 
 ## Documentation before tagging
 
-- Update `CHANGELOG.md`, this release's `RELEASE_NOTES.md`, and versioned status text.
+- Update the release section in `CHANGELOG.md` and any version-specific examples.
 - Check README, binary quick-start, configuration, SDK READMEs, and security limits.
 - Update root and starter `Cargo.lock` for the new root crate version without
   refreshing unrelated dependency versions; verify `git diff` before committing.
 - Run `python -m unittest discover -s scripts/tests -v` (includes relative-link checks)
   and `cargo test --locked --test release_manifest` (the exact downloadable YAML).
-- Review archived samples and Git history before any separately authorized public launch.
+- Review new samples, docs, and commit contents for secrets and personal data before pushing.
 - Keep repository visibility and registry publication separate from version-tag releases.
 
 ## Local checks

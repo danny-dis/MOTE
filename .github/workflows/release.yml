@@ -131,11 +131,25 @@ jobs:
       - name: Verify complete asset set and assemble checksums
         run: |
           python -c 'import os; from pathlib import Path; from scripts.release import assemble; assemble(Path("."), Path("release-assets"), os.environ["RELEASE_TAG"])'
+      - name: Extract release notes from changelog
+        run: |
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          version = os.environ["RELEASE_TAG"].removeprefix("v")
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(rf"(?ms)^## {re.escape(version)}\n(.*?)(?=^## |\Z)", changelog)
+          if not match or not match.group(1).strip():
+              raise SystemExit(f"Missing or empty changelog section for {version}")
+          notes = f"# MOTE {version}\n\n{match.group(1).strip()}\n\n"
+          notes += "[Download instructions and requirements](https://github.com/danny-dis/MOTE/blob/" + os.environ["RELEASE_TAG"] + "/docs/QUICKSTART.md)\n"
+          (Path(os.environ["RUNNER_TEMP"]) / "release-notes.md").write_text(notes, encoding="utf-8")
+          PY
       - name: Upload to draft, verify assets, then publish
         shell: bash
         run: |
           if ! gh release view "$RELEASE_TAG" --json isDraft,tagName,targetCommitish > "$RUNNER_TEMP/release-state.json" 2>/dev/null; then
-            gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" --title "MOTE $RELEASE_TAG" --draft --prerelease=false --generate-notes --notes-file docs/RELEASE_NOTES.md
+            gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" --title "MOTE $RELEASE_TAG" --draft --prerelease=false --generate-notes --notes-file "$RUNNER_TEMP/release-notes.md"
             gh release view "$RELEASE_TAG" --json isDraft,tagName,targetCommitish > "$RUNNER_TEMP/release-state.json"
           fi
           python - <<'PY'

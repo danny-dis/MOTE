@@ -9,7 +9,7 @@ repository = "https://github.com/danny-dis/MOTE"
 readme = "README.md"
 exclude = [
     "reports/**", "!reports/.keep",
-    "docs/archive/**", "test_input.txt",
+    "site/**", "test_input.txt",
 ]
 
 [lib]

@@ -1,8 +1,8 @@
 # Contributing to MOTE
 
 Thanks for contributing. Keep changes focused: MOTE is an execution engine, not a
-full agent platform. Read [Design principles](DESIGN_PRINCIPLES.md),
-[Architecture](docs/ARCHITECTURE.md), and [Security](SECURITY.md) before proposing core features.
+full agent platform. Read [Architecture and design principles](docs/ARCHITECTURE.md)
+and [Security](SECURITY.md) before proposing core features.
 
 ## Scope and discussion
 
@@ -11,10 +11,22 @@ cannot provide it, and its dependency/security cost. For bugs, provide a minimal
 reproduction with a redacted manifest. Do not post credentials or private workspace
 contents. Security issues follow the private reporting process in `SECURITY.md`.
 
+## Support and bug reports
+
+Use [GitHub Issues](https://github.com/danny-dis/MOTE/issues) for usage questions or
+reproducible bugs. There is no promised support SLA. Check the
+[quick-start troubleshooting](docs/QUICKSTART.md#troubleshooting) and existing issues first.
+
+Include the CLI/bridge/SDK versions, OS and architecture, source tag or commit,
+redacted manifest, exact command, exit status, and expected versus actual result.
+Reproduce in a small non-sensitive workspace and distinguish runtime completion
+from whether the generated result is correct. Never attach credentials, private
+workspace contents, or unredacted logs; report vulnerabilities via [Security](SECURITY.md#reporting-a-vulnerability).
+
 ## Development setup
 
 Clone the repository and work from its root. The integration branch is
-`production-ready`, not `main`. Repository access is currently required.
+`production-ready`, not `main`. Source and downloads are public.
 
 - Stable Rust and the native build tools required by your Rust target.
 - Windows: MSVC Rust plus Visual Studio C++ build tools, or a complete compatible
@@ -95,5 +107,7 @@ pre-commit packaging checks, never as evidence of a published release.
 
 Maintainers choose a new version and push its tag; CI builds and publishes binary
 archives automatically. Follow [Releasing](docs/RELEASING.md). Do not move published
-tags or replace released assets to hide mistakes. Old design proposals belong in
-[the archive](docs/archive/README.md), clearly labeled rather than advertised as implemented.
+tags or replace released assets to hide mistakes. Keep current docs focused on
+shipped behavior; obsolete proposals and reports can be recovered from Git history.
+Use the root README as the documentation index and the changelog as the single
+source for version-specific release notes.

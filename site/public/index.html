@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111410">
+  <title>MOTE — Small engine. Your agent.</title>
+  <meta name="description" content="Build AI agents without adopting a whole framework. MOTE is a small Rust execution engine with Python and TypeScript SDKs. Your model. Your tools. Your application.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="MOTE">
+  <meta property="og:url" content="https://mote-runtime.vercel.app/">
+  <link rel="canonical" href="https://mote-runtime.vercel.app/">
+  <meta property="og:title" content="MOTE — Small engine. Your agent.">
+  <meta property="og:description" content="A small Rust execution engine for AI agents. Connect your model, add your tools, and keep control of your application.">
+  <meta property="og:image" content="https://mote-runtime.vercel.app/social-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MOTE — Small engine. Your agent.">
+  <meta name="twitter:description" content="Build AI agents. Keep control. Rust engine · Python & TypeScript SDKs.">
+  <meta name="twitter:image" content="https://mote-runtime.vercel.app/social-card.png">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header wrap">
+  <a class="brand" href="#" aria-label="MOTE home"><img src="/favicon.svg" width="34" height="34" alt=""><span>MOTE</span></a>
+  <nav aria-label="Main navigation"><a href="#how-it-works">The engine</a><a href="#build">Build with it</a><a class="nav-cta" href="#start">Get started <span aria-hidden="true">↗</span></a></nav>
+</header>
+<main id="main">
+  <section class="hero wrap" aria-labelledby="hero-heading">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="signal" aria-hidden="true"></span> MINIMAL ORCHESTRATION &amp; TASK EXECUTION</p>
+      <h1 id="hero-heading">Small engine.<br><span>Your agent.</span></h1>
+      <p class="hero-description">Build AI agents without adopting a whole framework. MOTE handles the execution loop. You keep control of the application.</p>
+      <div class="actions"><a class="button primary" href="#start">Start building <span aria-hidden="true">↗</span></a><a class="text-link" href="#how-it-works">See how it works <span aria-hidden="true">↓</span></a></div>
+      <p class="hero-detail">Written in Rust. Use it from Python, TypeScript, or the terminal.</p>
+    </div>
+    <div class="engine-visual" aria-label="Illustrated execution loop: model proposes, MOTE checks, tool runs, observation returns to the model">
+      <div class="visual-bar"><span class="tiny-mark" aria-hidden="true">◈</span><span>ONE TASK. A BOUNDED LOOP.</span><span class="visual-badge">ENGINE</span></div>
+      <div class="orbit">
+        <span class="orbit-label top">YOUR MODEL</span><span class="orbit-label bottom">YOUR TOOLS</span>
+        <div class="orbit-ring outer"></div><div class="orbit-ring inner"></div>
+        <div class="orbit-line vertical"></div><div class="orbit-line horizontal"></div>
+        <span class="orbit-node north" aria-hidden="true"></span><span class="orbit-node east" aria-hidden="true"></span><span class="orbit-node south" aria-hidden="true"></span><span class="orbit-node west" aria-hidden="true"></span>
+        <div class="engine-core"><img src="/favicon.svg" alt="" width="48" height="48"><strong>MOTE</strong><span>execution core</span></div>
+        <span class="orbit-side left">PROPOSE</span><span class="orbit-side right">OBSERVE</span>
+      </div>
+      <div class="visual-foot"><span><i aria-hidden="true"></i> explicit tool grants</span><span>finite run budgets</span></div>
+    </div>
+  </section>
+  <div class="platform-strip wrap" aria-label="Supported integrations and platforms"><span class="strip-label">ONE CORE. YOUR STACK.</span><span>Rust</span><span>Python</span><span>TypeScript</span><span class="strip-divider" aria-hidden="true"></span><span class="platforms">Windows · Linux · Apple Silicon</span></div>
+  <section class="section wrap" id="how-it-works" aria-labelledby="loop-heading">
+    <div class="section-heading"><p class="eyebrow">01 / THE EXECUTION LOOP</p><h2 id="loop-heading">A small core.<br>A clear job.</h2><p>Models propose actions. MOTE checks the granted capabilities, runs the tool, and returns the observation. Repeat until the run completes or a limit is reached.</p></div>
+    <div class="steps">
+      <article class="step"><span class="step-number">01</span><h3>Connect your model</h3><p>Use a supported provider or an OpenAI-compatible endpoint. Local or remote—bring the model that fits your task.</p><span class="step-tag">MODEL → ACTION</span></article>
+      <article class="step"><span class="step-number">02</span><h3>Choose the tools</h3><p>Grant only what the task needs. Use built-in file tools or register a function owned by your application.</p><span class="step-tag">EXPLICIT CAPABILITIES</span></article>
+      <article class="step"><span class="step-number">03</span><h3>Bound the run</h3><p>Set iteration, tool-call, runtime, and observation limits. Inspect the events and validate the result yourself.</p><span class="step-tag">OBSERVE → VALIDATE</span></article>
+    </div>
+    <aside class="boundary-note"><strong>Permissions are not a sandbox.</strong> Tools and callbacks retain host privileges. Use external isolation for untrusted workloads.</aside>
+  </section>
+  <section class="build-section" id="build" aria-labelledby="build-heading">
+    <div class="wrap build-grid">
+      <div class="build-copy"><p class="eyebrow">02 / MAKE IT YOURS</p><h2 id="build-heading">Your tools.<br>Not our framework.</h2><p>Turn an ordinary function into an agent tool. Keep your existing application, data layer, and deployment.</p><ul class="check-list"><li>Embed directly in Rust</li><li>Host Python or TypeScript callbacks</li><li>Run YAML-configured tasks from the CLI</li></ul><a class="text-link" href="https://github.com/danny-dis/MOTE/blob/production-ready/docs/BUILDING_ON_MOTE.md">Read the integration guide <span aria-hidden="true">↗</span></a><p class="small-note">Public source. MIT licensed. No vendor account required.</p></div>
+      <div class="code-window">
+        <div class="code-toolbar"><div class="tabs" role="tablist" aria-label="Code example language" hidden><button type="button" role="tab" id="tab-python" aria-controls="code-python" aria-selected="true" tabindex="0" data-tab="python">Python</button><button type="button" role="tab" id="tab-typescript" aria-controls="code-typescript" aria-selected="false" tabindex="-1" data-tab="typescript">TypeScript</button><button type="button" role="tab" id="tab-cli" aria-controls="code-cli" aria-selected="false" tabindex="-1" data-tab="cli">CLI</button></div><span class="code-label">INTEGRATION SKETCH</span><button type="button" class="copy-button" id="copy-code" hidden>Copy</button></div>
+        <div id="code-python" class="code-panel" role="tabpanel" aria-labelledby="tab-python" tabindex="0"><pre><code>from mote_sdk import Client, Tool
+
+result = Client(binary="./mote-bridge").run(
+    manifest={
+        "name": "my-agent",
+        "capabilities": ["uppercase"],
+        "models": [{
+            "provider": "openai-compatible",
+            "model": "your-model",
+            "endpoint": "http://localhost:8080/v1/chat/completions",
+        }],
+    },
+    task='Call uppercase with {"text":"hello"}, then complete.',
+    tools={"uppercase": Tool(
+        "Input: text string. Return uppercase text.",
+        lambda data: data["text"].upper(),
+    )},
+)
+# Inspect result.events and validate your output.</code></pre></div>
+        <div id="code-typescript" class="code-panel" role="tabpanel" aria-labelledby="tab-typescript" tabindex="0" hidden><pre><code>import { Client } from "@mote-agent/sdk";
+
+const result = await new Client({
+  binary: "./mote-bridge",
+}).run({
+  manifest: {
+    name: "my-agent",
+    capabilities: ["uppercase"],
+    models: [{
+      provider: "openai-compatible",
+      model: "your-model",
+      endpoint: "http://localhost:8080/v1/chat/completions",
+    }],
+  },
+  task: 'Call uppercase with {"text":"hello"}, then complete.',
+  tools: { uppercase: {
+    description: "Input: text string. Return uppercase text.",
+    handler: ({ text }) =&gt; String(text).toUpperCase(),
+  } },
+});
+// Inspect result.events and validate your output.</code></pre></div>
+        <div id="code-cli" class="code-panel" role="tabpanel" aria-labelledby="tab-cli" tabindex="0" hidden><pre><code># 1. Download and extract the archive for your platform.
+# 2. Configure agent.yaml with your model and endpoint.
+# 3. Put a non-sensitive file in its workspace.
+
+./mote --jsonl agent.yaml "Read and summarize the workspace"
+
+# Windows PowerShell:
+.\mote.exe --jsonl agent.yaml "Read and summarize the workspace"
+
+# Events are delivered after the run, not streamed live.
+# No model is bundled. You supply the model connection.</code></pre></div>
+        <div class="code-footer"><span>Registration ≠ permission. Grant the tool by name.</span><span id="copy-status" role="status" aria-live="polite"></span></div>
+        <p class="code-help">Illustrative examples, not a live browser agent. Install the SDK and bridge first, select a real endpoint, and configure <code>auth_env</code> if needed. On Windows, use a path to <code>mote-bridge.exe</code>.</p>
+      </div>
+    </div>
+  </section>
+  <section class="section wrap split-section" aria-labelledby="scope-heading">
+    <div><p class="eyebrow">03 / INTENTIONALLY FOCUSED</p><h2 id="scope-heading">An engine.<br>Not an ecosystem<br>you have to adopt.</h2></div>
+    <div class="scope-list"><div><span class="scope-label">MOTE PROVIDES</span><p>The execution loop, tool grants, budgets, model adapters, and post-run events.</p></div><div><span class="scope-label">YOU OWN</span><p>Your UI, users, storage, scheduling, business rules, approvals, and result validation.</p></div><div><span class="scope-label">NOT BUNDLED</span><p>An AI model, hosted inference, a database, a chat interface, or an operating-system sandbox.</p></div></div>
+  </section>
+  <section class="start-section wrap" id="start" aria-labelledby="start-heading">
+    <div class="start-top"><div><p class="eyebrow">04 / START SMALL. BUILD SOMETHING USEFUL.</p><h2 id="start-heading">Pick your way in.</h2></div><span class="release-pill">v0.13.1 <span aria-hidden="true">↗</span></span></div>
+    <div class="start-grid">
+      <article><span class="start-icon" aria-hidden="true">&gt;_</span><h3>Run the engine</h3><p>Download a prebuilt CLI and bridge. No Rust toolchain required.</p><a href="https://github.com/danny-dis/MOTE/releases/latest">Get the binaries <span aria-hidden="true">↗</span></a><span class="card-meta">Windows x64 · Linux x64 · Apple Silicon</span></article>
+      <article><span class="start-icon" aria-hidden="true">{ }</span><h3>Build an application</h3><p>Use the Python or TypeScript SDK, or start with the Rust application template.</p><a href="https://github.com/danny-dis/MOTE/blob/production-ready/docs/BUILDING_ON_MOTE.md">Choose an integration <span aria-hidden="true">↗</span></a><span class="card-meta">SDKs install from source, not npm/PyPI</span></article>
+      <article><span class="start-icon" aria-hidden="true">↳</span><h3>Explore the source</h3><p>Read the architecture, check the limits, and see how the engine fits your project.</p><a href="https://github.com/danny-dis/MOTE">View on GitHub <span aria-hidden="true">↗</span></a><span class="card-meta">MIT licensed · Pre-1.0 API</span></article>
+    </div>
+    <p class="launch-note"><strong>Open source, ready to explore.</strong> Source, documentation, and downloads are public on GitHub. Downloads are unsigned/not notarized; verify their checksums. No account or payment is collected on this site.</p>
+  </section>
+  <section class="faq-section wrap" aria-labelledby="faq-heading"><p class="eyebrow">A FEW THINGS WORTH KNOWING</p><h2 id="faq-heading">Straight answers.</h2><div class="faq-list">
+    <details><summary>Is MOTE an AI model?</summary><p>No. MOTE is the execution engine. You connect a supported model provider or local endpoint. Provider access, credentials, costs, and model quality are separate from MOTE.</p></details>
+    <details><summary>Do I need to install Rust?</summary><p>Not for the downloadable CLI or bridge. Python and TypeScript applications can use a prebuilt bridge. You need a Rust toolchain to compile from source or embed the Rust library.</p></details>
+    <details><summary>Can it run untrusted code safely?</summary><p>Not by itself. Capabilities limit what MOTE is allowed to invoke, but shell commands and application callbacks retain host privileges. Use an isolated account, container, or VM appropriate for your workload.</p></details>
+    <details><summary>Are tool callbacks and events live?</summary><p>Tool callbacks are interactive through the bridge. The CLI JSONL output and SDK event list arrive after the run. Timeouts do not guarantee termination of every descendant process or blocking host callback.</p></details>
+    <details><summary>What should I verify before shipping an agent?</summary><p>Test the actual model endpoint and deployment environment, grant only the tools needed, and validate the resulting files or business outcomes. A completed run is not proof that an answer is correct.</p></details>
+  </div></section>
+  <section class="closing wrap"><p>Keep the core small.<br><span>Build the rest your way.</span></p><a class="button primary" href="#start">Build with MOTE <span aria-hidden="true">↗</span></a></section>
+</main>
+<footer class="site-footer wrap"><a class="brand" href="#" aria-label="MOTE home"><img src="/favicon.svg" width="28" height="28" alt=""><span>MOTE</span></a><span>Minimal Orchestration &amp; Task Execution</span><div><a href="https://github.com/danny-dis/MOTE#documentation">Docs</a><a href="https://github.com/danny-dis/MOTE/blob/production-ready/SECURITY.md">Security</a><a href="https://github.com/danny-dis/MOTE/blob/production-ready/LICENSE">MIT License</a></div><p class="privacy-note">Static site. No analytics, signup forms, or model requests. Hosting providers may retain standard access logs.</p></footer>
+</body>
+</html>
