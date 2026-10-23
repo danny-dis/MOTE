@@ -106,7 +106,17 @@ const result = await new Client({
   } },
 });
 // Inspect result.events and validate your output.</code></pre></div>
-        <div id="code-go" class="code-panel" role="tabpanel" aria-labelledby="tab-go" tabindex="0" hidden><pre><code>ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+        <div id="code-go" class="code-panel" role="tabpanel" aria-labelledby="tab-go" tabindex="0" hidden><pre><code>import (
+    "context"
+    "log"
+    "strings"
+    "time"
+
+    mote "github.com/danny-dis/MOTE/sdk/go"
+)
+
+func runAgent() {
+ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 defer cancel()
 
 result, err := (&amp;mote.Client{Binary: "./mote-bridge"}).Run(
@@ -131,7 +141,8 @@ result, err := (&amp;mote.Client{Binary: "./mote-bridge"}).Run(
     },
 )
 if err != nil { log.Fatal(err) }
-if !result.Success() { log.Fatal("Agent run failed") }</code></pre></div>\n        <div id="code-cli" class="code-panel" role="tabpanel" aria-labelledby="tab-cli" tabindex="0" hidden><pre><code># 1. Download and extract the archive for your platform.
+if !result.Success() { log.Fatal("Agent run failed") }
+}</code></pre></div>\n        <div id="code-cli" class="code-panel" role="tabpanel" aria-labelledby="tab-cli" tabindex="0" hidden><pre><code># 1. Download and extract the archive for your platform.
 # 2. Configure agent.yaml with your model and endpoint.
 # 3. Put a non-sensitive file in its workspace.
 
@@ -155,7 +166,7 @@ if !result.Success() { log.Fatal("Agent run failed") }</code></pre></div>\n     
     <div class="start-top"><div><p class="eyebrow">04 / GET STARTED</p><h2 id="start-heading">Choose how to run MOTE.</h2></div><span class="release-pill">v0.14.1 <span aria-hidden="true">↗</span></span></div>
     <div class="start-grid">
       <article><span class="start-icon" aria-hidden="true">&gt;_</span><h3>Run the engine</h3><p>Download the CLI and bridge for your platform. You do not need a Rust toolchain to run them.</p><a href="https://github.com/danny-dis/MOTE/releases/latest">Get the binaries <span aria-hidden="true">↗</span></a><span class="card-meta">Windows x64 · Linux x64 · Apple Silicon</span></article>
-      <article><span class="start-icon" aria-hidden="true">{ }</span><h3>Build an application</h3><p>Install the Python, TypeScript, or Go SDK from source, or adapt the Rust application starter.</p><a href="https://github.com/danny-dis/MOTE/blob/production-ready/docs/BUILDING_ON_MOTE.md">Choose an integration <span aria-hidden="true">↗</span></a><span class="card-meta">SDKs are source-installed, not published to package registries</span></article>
+      <article><span class="start-icon" aria-hidden="true">{ }</span><h3>Build an application</h3><p>Install the Python, TypeScript, or Go SDK from source, or adapt the Rust application starter.</p><a href="https://github.com/danny-dis/MOTE/blob/production-ready/docs/BUILDING_ON_MOTE.md">Choose an integration <span aria-hidden="true">↗</span></a><a href="https://github.com/danny-dis/MOTE/blob/production-ready/sdk/go/README.md">Read the Go SDK guide <span aria-hidden="true">↗</span></a><span class="card-meta">SDKs are source-installed, not published to package registries</span></article>
       <article><span class="start-icon" aria-hidden="true">↳</span><h3>Read the source</h3><p>Review the architecture and runtime limits before integrating MOTE into your project.</p><a href="https://github.com/danny-dis/MOTE">View on GitHub <span aria-hidden="true">↗</span></a><span class="card-meta">MIT licensed · Pre-1.0 API</span></article>
     </div>
     <p class="launch-note"><strong>Check downloads before running them.</strong> Source, documentation, and downloads are public on GitHub. Binaries are unsigned and not notarized. Verify their checksums; a checksum checks integrity, not publisher identity. This site does not collect account details or payments.</p>
