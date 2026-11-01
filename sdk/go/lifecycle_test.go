@@ -13,29 +13,41 @@ import (
 
 func TestCooperativeHandlerHonorsDeadline(t *testing.T) {
 	var called bool
+	var deadline time.Time
 	tools := map[string]mote.Tool{
 		"x": {
 			Description: "x",
 			Handler: func(ctx context.Context, _ map[string]any) (string, error) {
 				called = true
+				var ok bool
+				deadline, ok = ctx.Deadline()
+				if !ok || ctx.Err() != nil {
+					t.Fatalf("handler must enter with a live deadline: deadline=%v err=%v", deadline, ctx.Err())
+				}
 				<-ctx.Done()
+				if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					t.Fatalf("handler context error = %v, want DeadlineExceeded", ctx.Err())
+				}
 				return "", ctx.Err()
 			},
 		},
 	}
 
-	started := time.Now()
-	result, err := runMode(t, "success", tools, 500*time.Millisecond)
+	// Allow fixture startup separately from the prompt deadline-delivery check.
+	result, err := runMode(t, "success", tools, 5*time.Second)
 	if err == nil {
 		t.Fatalf("expected timeout, got result %+v", result)
 	}
 	if !errors.Is(err, mote.ErrTimeout) {
 		t.Fatalf("error = %v, want ErrTimeout", err)
 	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("error = %v, want DeadlineExceeded cause", err)
+	}
 	if !called {
 		t.Fatal("handler was never invoked")
 	}
-	if elapsed := time.Since(started); elapsed > 4*time.Second {
+	if elapsed := time.Since(deadline); elapsed > 3*time.Second {
 		t.Fatalf("deadline not enforced promptly: %v", elapsed)
 	}
 }
@@ -79,8 +91,18 @@ func TestTrailingFrameAfterTerminalRejected(t *testing.T) {
 }
 
 func TestMalformedFailsPromptly(t *testing.T) {
-	started := time.Now()
-	result, err := runMode(t, "malformed", upperTool(), 4*time.Second)
+	var started time.Time
+	tools := map[string]mote.Tool{"x": {
+		Description: "Confirm startup before measuring protocol rejection",
+		Handler: func(context.Context, map[string]any) (string, error) {
+			started = time.Now()
+			return "OK", nil
+		},
+	}}
+	result, err := runMode(t, "malformed_after_callback", tools, 5*time.Second)
+	if started.IsZero() {
+		t.Fatal("callback was not reached before measuring protocol rejection")
+	}
 	if err == nil {
 		t.Fatalf("expected error, got result %+v", result)
 	}

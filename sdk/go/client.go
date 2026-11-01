@@ -309,20 +309,7 @@ func readFrames(out io.Reader, frames chan<- frameItem, stop <-chan struct{}) {
 }
 
 func drainStderr(r io.Reader) {
-	retained := make([]byte, 0, maxStderr)
-	buf := make([]byte, 8192)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			retained = append(retained, buf[:n]...)
-			if len(retained) > maxStderr {
-				retained = retained[len(retained)-maxStderr:]
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
+	_, _ = io.Copy(io.Discard, r)
 }
 
 func invokeTool(ctx context.Context, tool Tool, input map[string]any) (output string, err error) {

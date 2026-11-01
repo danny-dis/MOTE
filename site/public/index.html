@@ -142,7 +142,8 @@ result, err := (&amp;mote.Client{Binary: "./mote-bridge"}).Run(
 )
 if err != nil { log.Fatal(err) }
 if !result.Success() { log.Fatal("Agent run failed") }
-}</code></pre></div>\n        <div id="code-cli" class="code-panel" role="tabpanel" aria-labelledby="tab-cli" tabindex="0" hidden><pre><code># 1. Download and extract the archive for your platform.
+}</code></pre></div>
+        <div id="code-cli" class="code-panel" role="tabpanel" aria-labelledby="tab-cli" tabindex="0" hidden><pre><code># 1. Download and extract the archive for your platform.
 # 2. Configure agent.yaml with your model and endpoint.
 # 3. Put a non-sensitive file in its workspace.
 
@@ -163,7 +164,8 @@ if !result.Success() { log.Fatal("Agent run failed") }
     <div class="scope-list"><div><span class="scope-label">MOTE PROVIDES</span><p>The execution loop, tool permissions, run budgets, model adapters, and events delivered after a run.</p></div><div><span class="scope-label">YOU OWN</span><p>Your UI, user management, storage, scheduling, business rules, approvals, and checks on the results.</p></div><div><span class="scope-label">NOT BUNDLED</span><p>An AI model, hosted inference, a database, a chat interface, or an operating-system sandbox.</p></div></div>
   </section>
   <section class="start-section wrap" id="start" aria-labelledby="start-heading">
-    <div class="start-top"><div><p class="eyebrow">04 / GET STARTED</p><h2 id="start-heading">Choose how to run MOTE.</h2></div><span class="release-pill">v0.14.1 <span aria-hidden="true">↗</span></span></div>
+    <div class="start-top"><div><p class="eyebrow">04 / GET STARTED</p><h2 id="start-heading">Choose how to run MOTE.</h2></div><span class="release-pill">v0.14.2 <span aria-hidden="true">↗</span></span></div>
+    <p class="small-note">This maintenance release reduces duplicated runtime code and unused Go stderr allocations, and strengthens SDK protocol and timeout tests. <a href="https://github.com/danny-dis/MOTE/releases/tag/v0.14.2">Read the release notes.</a></p>
     <div class="start-grid">
       <article><span class="start-icon" aria-hidden="true">&gt;_</span><h3>Run the engine</h3><p>Download the CLI and bridge for your platform. You do not need a Rust toolchain to run them.</p><a href="https://github.com/danny-dis/MOTE/releases/latest">Get the binaries <span aria-hidden="true">↗</span></a><span class="card-meta">Windows x64 · Linux x64 · Apple Silicon</span></article>
       <article><span class="start-icon" aria-hidden="true">{ }</span><h3>Build an application</h3><p>Install the Python, TypeScript, or Go SDK from source, or adapt the Rust application starter.</p><a href="https://github.com/danny-dis/MOTE/blob/production-ready/docs/BUILDING_ON_MOTE.md">Choose an integration <span aria-hidden="true">↗</span></a><a href="https://github.com/danny-dis/MOTE/blob/production-ready/sdk/go/README.md">Read the Go SDK guide <span aria-hidden="true">↗</span></a><span class="card-meta">SDKs are source-installed, not published to package registries</span></article>
@@ -173,7 +175,7 @@ if !result.Success() { log.Fatal("Agent run failed") }
   </section>
   <section class="faq-section wrap" aria-labelledby="faq-heading"><p class="eyebrow">BEFORE YOU RUN AN AGENT</p><h2 id="faq-heading">Common questions.</h2><div class="faq-list">
     <details><summary>Is MOTE an AI model?</summary><p>No. MOTE runs tasks using a model you connect through a supported provider or local endpoint. You arrange provider access and credentials, cover any model costs, and choose a model that meets your needs.</p></details>
-    <details><summary>Do I need to install Rust?</summary><p>The downloadable CLI and bridge run without a Rust toolchain. Python and TypeScript applications can use the prebuilt bridge. You need Rust to compile from source or embed the library.</p></details>
+    <details><summary>Do I need to install Rust?</summary><p>The downloadable CLI and bridge run without a Rust toolchain. Python, TypeScript, and Go applications can use the prebuilt bridge. You need Rust to compile from source or embed the library.</p></details>
     <details><summary>Can it run untrusted code safely?</summary><p>MOTE does not provide an OS sandbox. Capabilities limit which tools it can call; shell commands and callbacks still run with the host's privileges. Use an isolated account, container, or VM suited to your workload.</p></details>
     <details><summary>When do callbacks run and events arrive?</summary><p>The bridge calls your tool handlers during a run. CLI JSONL output and SDK events arrive after it ends. A timeout does not guarantee that every descendant process or blocking host callback has stopped.</p></details>
     <details><summary>What should I verify before shipping an agent?</summary><p>Test against the model endpoint and environment you will deploy. Grant only the tools the task needs, then check the resulting files or business outcomes. Completion alone does not prove the output is correct.</p></details>

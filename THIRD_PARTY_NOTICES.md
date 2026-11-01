@@ -1,6 +1,6 @@
 # Third-party dependency inventory (source release)
 
-This inventory lists the 90 registry packages in `Cargo.lock` for `mote-agent` 0.14.1. Each license expression comes from that exact crate version's `Cargo.toml` in the local Cargo registry. It records the crate's declared licensing options; it does not establish copyright ownership or which option was exercised. The expressions retain `OR`, `AND`, `WITH`, and the legacy `MIT/Apache-2.0` spelling. The remaining lockfile entry is the root `mote-agent` package.
+This inventory lists the 90 registry packages in `Cargo.lock` for `mote-agent` 0.14.2. Each license expression comes from that exact crate version's `Cargo.toml` in the local Cargo registry. It records the crate's declared licensing options; it does not establish copyright ownership or which option was exercised. The expressions retain `OR`, `AND`, `WITH`, and the legacy `MIT/Apache-2.0` spelling. The remaining lockfile entry is the root `mote-agent` package.
 
 A source-only `cargo package --list --allow-dirty --offline` lists the project files, including `Cargo.lock` and the project's MIT `LICENSE`. It contains no vendored dependency source or binary. A lockfile entry does not redistribute a dependency's code. When you redistribute third-party works, include their required license texts, copyright notices, and upstream `NOTICE` files. This inventory does not replace them.
 

@@ -35,6 +35,14 @@ func main() {
 		readLine(in)
 		writeRaw("{bad}\n")
 
+	case "malformed_after_callback":
+		readLine(in)
+		writeLine(map[string]any{"type": "tool_call", "id": 1, "name": "x", "input": map[string]any{}})
+		readLine(in)
+		writeRaw("{bad}\n")
+		// Stay alive so prompt rejection cannot be mistaken for child exit.
+		time.Sleep(30 * time.Second)
+
 	case "oversized":
 		readLine(in)
 		writeRaw(strings.Repeat("x", oversizedBytes) + "\n")

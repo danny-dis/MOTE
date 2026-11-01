@@ -2,6 +2,14 @@ use serde_json::Value;
 use std::io::Read;
 use std::time::Duration;
 
+pub(crate) fn authentication(auth_env: Option<&str>) -> Result<Option<String>, String> {
+    auth_env
+        .map(|name| {
+            std::env::var(name).map_err(|_| format!("missing auth environment variable: {name}"))
+        })
+        .transpose()
+}
+
 pub(crate) fn post_json(
     endpoint: &str,
     headers: &[(&str, String)],
@@ -44,6 +52,22 @@ mod tests {
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
     use std::thread;
+
+    #[test]
+    fn authentication_preserves_keyless_missing_and_configured_values() {
+        assert_eq!(authentication(None).unwrap(), None);
+        let name = format!("MOTE_AUTH_TEST_{}", std::process::id());
+        assert!(std::env::var_os(&name).is_none());
+        assert_eq!(
+            authentication(Some(&name)).unwrap_err(),
+            format!("missing auth environment variable: {name}")
+        );
+        for value in ["test-only-key", ""] {
+            std::env::set_var(&name, value);
+            assert_eq!(authentication(Some(&name)).unwrap(), Some(value.to_owned()));
+        }
+        std::env::remove_var(&name);
+    }
 
     fn read_request(stream: &mut impl BufRead) -> bool {
         let mut line = String::new();

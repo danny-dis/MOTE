@@ -1,6 +1,6 @@
 use crate::action::Action;
 use crate::config::{Manifest, ModelConfig};
-use crate::http::post_json;
+use crate::http::{authentication, post_json};
 use serde_json::{json, Value};
 use std::str::FromStr;
 use std::time::Duration;
@@ -124,18 +124,8 @@ impl HttpModel {
         Ok(model)
     }
 
-    fn authentication(&self) -> Result<Option<String>, String> {
-        self.auth_env
-            .as_ref()
-            .map(|name| {
-                std::env::var(name)
-                    .map_err(|_| format!("missing auth environment variable: {name}"))
-            })
-            .transpose()
-    }
-
     fn request(&self, prompt: &str) -> Result<Value, String> {
-        let authentication = self.authentication()?;
+        let authentication = authentication(self.auth_env.as_deref())?;
         let mut headers = Vec::new();
         let body = match self.provider {
             Provider::OpenAiCompatible | Provider::DmrX => {

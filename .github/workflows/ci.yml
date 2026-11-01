@@ -37,14 +37,14 @@ jobs:
         run: cargo run --locked --example basic_agent
       - name: Custom-tool example
         run: cargo run --locked --example custom_tool
-      - name: Install Python for SDK tests
+      - name: Install Python for release tooling
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install Node for SDK tests
+      - name: Install minimum supported Node for SDK tests
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
       - name: Install Go for SDK tests
         uses: actions/setup-go@v5
         with:
@@ -52,6 +52,10 @@ jobs:
           cache: false
       - name: Release tooling tests
         run: python -m unittest discover -s scripts/tests -v
+      - name: Install minimum supported Python for SDK tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
       - name: Python SDK and real bridge integration
         shell: bash
         env:

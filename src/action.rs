@@ -31,3 +31,18 @@ pub enum Action {
         summary: String,
     },
 }
+
+impl Action {
+    pub(crate) fn capability(&self) -> Option<&str> {
+        match self {
+            Self::Shell { .. } => Some("shell"),
+            Self::ReadFile { .. } => Some("read_file"),
+            Self::WriteFile { .. } => Some("write_file"),
+            Self::ListDir { .. } => Some("list_dir"),
+            Self::Git { .. } => Some("git"),
+            Self::Decision { .. } => Some("decision"),
+            Self::Custom { name, .. } => Some(name),
+            Self::Complete { .. } => None,
+        }
+    }
+}

@@ -15,8 +15,8 @@ Send UTF-8 JSON objects over stdin/stdout, one per LF-terminated line. A frame m
 contain at most 1,048,576 bytes, including its newline. Blank, malformed, oversized,
 unterminated, and unexpected frames are errors. Reserve stdout for the protocol
 and stderr for diagnostics. Python and TypeScript discard stderr through the OS.
-The Go SDK drains it with at most 64 KiB retained internally. No bundled SDK
-returns stderr to the caller.
+The Go SDK continuously drains and discards it without retaining diagnostics.
+No bundled SDK returns stderr to the caller.
 
 The host starts the run with:
 

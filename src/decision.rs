@@ -1,5 +1,5 @@
 use crate::config::DecisionConfig;
-use crate::http::post_json;
+use crate::http::{authentication, post_json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -157,22 +157,12 @@ impl JevDecisionAdapter {
             max_response: 1_048_576,
         }
     }
-
-    fn authentication(&self) -> Result<Option<String>, String> {
-        self.auth_env
-            .as_ref()
-            .map(|name| {
-                std::env::var(name)
-                    .map_err(|_| format!("missing auth environment variable: {name}"))
-            })
-            .transpose()
-    }
 }
 
 impl DecisionProvider for JevDecisionAdapter {
     fn decide(&self, request: &DecisionRequest) -> Result<DecisionResult, String> {
         let mut headers = Vec::new();
-        if let Some(secret) = self.authentication()? {
+        if let Some(secret) = authentication(self.auth_env.as_deref())? {
             headers.push(("Authorization", format!("Bearer {secret}")));
         }
         let body = json!({
@@ -230,9 +220,7 @@ impl DmrXDecisionAdapter {
 impl DecisionProvider for DmrXDecisionAdapter {
     fn decide(&self, request: &DecisionRequest) -> Result<DecisionResult, String> {
         let mut headers = Vec::new();
-        if let Some(name) = &self.auth_env {
-            let secret = std::env::var(name)
-                .map_err(|_| format!("missing auth environment variable: {name}"))?;
+        if let Some(secret) = authentication(self.auth_env.as_deref())? {
             headers.push(("Authorization", format!("Bearer {secret}")));
         }
         let schema = serde_json::to_string(request)

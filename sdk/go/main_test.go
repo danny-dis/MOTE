@@ -38,12 +38,16 @@ func TestMain(m *testing.M) {
 	}
 	bin := filepath.Join(tmp, "bridge"+suffix)
 
-	build := exec.Command("go", "build", "-o", bin, "./testdata/bridge")
+	// TestMain runs before the test timeout starts, so bound fixture setup too.
+	buildCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	build := exec.CommandContext(buildCtx, "go", "build", "-o", bin, "./testdata/bridge")
 	build.Dir = dir
 	build.Stdout = os.Stderr
 	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "failed to build bridge fixture:", err)
+	buildErr := build.Run()
+	cancel()
+	if buildErr != nil {
+		fmt.Fprintln(os.Stderr, "failed to build bridge fixture:", buildErr)
 		_ = os.RemoveAll(tmp)
 		os.Exit(1)
 	}

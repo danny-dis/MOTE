@@ -5,6 +5,26 @@ releases. SDK package versions and the bridge protocol have separate versions.
 
 ## Unreleased
 
+## 0.14.2
+
+- Exercise the declared SDK minimums in CI: Python 3.10, Node 20 and Go 1.22.
+  Keep release tooling on Python 3.11, and extracted-release SDK checks on
+  Python 3.11 and Node 22. Add a regression for this runtime separation.
+- Consolidate action capability names, file-read/directory-list retry handling,
+  and provider authentication lookup without changing public APIs or permissions.
+- Remove unused Go stderr retention and the Python SDK's single-reader collection;
+  keep bounded transport handling and existing process cleanup.
+- Add regressions for capability grants, read/list budgets and errors,
+  authentication values, and the exact repeated-action/iteration-limit failures.
+- Make TypeScript fixtures independent of the working directory, flush terminal
+  frames before closing, and check protocol errors and callback redaction explicitly.
+  Separate ordinary fixture startup time from the existing short deadline checks.
+- Make the Go cooperative-handler test verify a live deadline and its propagated
+  cause after callback entry, and bound fixture compilation before tests start.
+  Measure malformed-frame rejection after callback readiness, and require exact
+  protocol errors in TypeScript lifecycle guards. Keep the separate short
+  startup-timeout regressions unchanged.
+
 ## 0.14.1
 
 - Add the official Go 1.22+ SDK (`sdk/go`) for bridge protocol v1, alongside

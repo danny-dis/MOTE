@@ -14,11 +14,11 @@ ordinary commits do not trigger releases.
    missing or empty. Commit and push to `production-ready`.
 2. Check that the working tree is clean and up to date.
 3. Create and push an annotated tag matching the new `Cargo.toml` version.
-   These commands illustrate `0.14.1`; always use a new, unpublished version:
+   These commands illustrate `0.14.2`; always use a new, unpublished version:
 
    ```sh
-   git tag -a v0.14.1 -m "MOTE v0.14.1"
-   git push origin v0.14.1
+   git tag -a v0.14.2 -m "MOTE v0.14.2"
+   git push origin v0.14.2
    ```
 
 GitHub Actions handles the build and asset upload:
@@ -76,7 +76,7 @@ This changes only that build; the default release artifacts stay stripped.
 python -m unittest discover -s scripts/tests -v
 cargo build --locked --release --bins
 python scripts/licenses.py --target YOUR_TARGET --output target/release
-python scripts/release.py --binary-dir target/release --output /path/outside/repo --target YOUR_TARGET --tag v0.14.1
+python scripts/release.py --binary-dir target/release --output /path/outside/repo --target YOUR_TARGET --tag v0.14.2
 ```
 
 Use the target that matches the binaries you built. Do not label MinGW/GNU Windows

@@ -10,10 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	maxFrame  = 1_048_576
-	maxStderr = 65_536
-)
+const maxFrame = 1_048_576
 
 type frameReader struct {
 	r *bufio.Reader

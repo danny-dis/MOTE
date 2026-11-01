@@ -475,31 +475,24 @@ impl Runtime {
         })
     }
     pub fn validate_action(&self, action: &Action) -> Result<(), String> {
-        let cap = match action {
-            Action::Shell { .. } => "shell",
-            Action::ReadFile { .. } => "read_file",
-            Action::WriteFile { .. } => "write_file",
-            Action::ListDir { .. } => "list_dir",
-            Action::Git { .. } => "git",
-            Action::Decision { .. } => "decision",
-            Action::Custom { name, input } => {
-                if !input.is_object() {
-                    return Err("custom tool input must be a JSON object".to_owned());
-                }
-                if serde_json::to_vec(input)
-                    .map_err(|_| "custom tool input cannot be encoded")?
-                    .len()
-                    > 1_048_576
-                {
-                    return Err("custom tool input exceeds 1048576 bytes".to_owned());
-                }
-                if !self.tools.contains_key(name) {
-                    return Err(format!("custom tool not registered: {name}"));
-                }
-                name
-            }
-            Action::Complete { .. } => return Ok(()),
+        let Some(cap) = action.capability() else {
+            return Ok(());
         };
+        if let Action::Custom { name, input } = action {
+            if !input.is_object() {
+                return Err("custom tool input must be a JSON object".to_owned());
+            }
+            if serde_json::to_vec(input)
+                .map_err(|_| "custom tool input cannot be encoded")?
+                .len()
+                > 1_048_576
+            {
+                return Err("custom tool input exceeds 1048576 bytes".to_owned());
+            }
+            if !self.tools.contains_key(name) {
+                return Err(format!("custom tool not registered: {name}"));
+            }
+        }
         if self.registry.allows(cap) {
             Ok(())
         } else {
@@ -618,18 +611,8 @@ impl Runtime {
             self.events.push(Event::ActionProposed {
                 action: action_description.clone(),
             });
-            let capability_name = match &action {
-                Action::Shell { .. } => Some("shell".to_owned()),
-                Action::ReadFile { .. } => Some("read_file".to_owned()),
-                Action::WriteFile { .. } => Some("write_file".to_owned()),
-                Action::ListDir { .. } => Some("list_dir".to_owned()),
-                Action::Git { .. } => Some("git".to_owned()),
-                Action::Decision { .. } => Some("decision".to_owned()),
-                Action::Custom { name, .. } => Some(name.clone()),
-                Action::Complete { .. } => None,
-            };
-            if let Some(name) = capability_name {
-                let count = tool_counts.entry(name.clone()).or_default();
+            if let Some(name) = action.capability() {
+                let count = tool_counts.entry(name.to_owned()).or_default();
                 if *count >= self.max_per_tool {
                     let observation = format!(
                         "error: {name} tool call limit ({}) reached",
@@ -642,7 +625,7 @@ impl Runtime {
                     context.push_str(&observation);
                     continue;
                 }
-                if !matches!(name.as_str(), "read_file" | "list_dir") {
+                if !matches!(name, "read_file" | "list_dir") {
                     *count += 1;
                 }
             }
@@ -670,20 +653,30 @@ impl Runtime {
                         }
                     }
                 }
-                Action::ReadFile { path } => {
-                    let count = tool_counts.get_mut("read_file").expect("count initialized");
+                Action::ReadFile { ref path } | Action::ListDir { ref path } => {
+                    let name = if matches!(action, Action::ReadFile { .. }) {
+                        "read_file"
+                    } else {
+                        "list_dir"
+                    };
+                    let count = tool_counts.get_mut(name).expect("count initialized");
                     match retry_read(
                         || {
-                            self.workspace
-                                .read_limited(&path, self.max_output_bytes)
-                                .map_err(|error| error.to_string())
+                            if name == "read_file" {
+                                self.workspace.read_limited(path, self.max_output_bytes)
+                            } else {
+                                self.workspace
+                                    .list_limited(path, self.max_output_bytes)
+                                    .map(|entries| entries.join("\n"))
+                            }
+                            .map_err(|error| error.to_string())
                         },
                         count,
                         self.max_per_tool,
-                        "read_file",
+                        name,
                     ) {
-                        Ok(content) => ("read_file", content),
-                        Err(error) if error.starts_with("read_file tool call limit") => {
+                        Ok(content) => (name, content),
+                        Err(error) if error.starts_with(&format!("{name} tool call limit")) => {
                             let observation = format!("error: {error}");
                             self.events.push(Event::ObservationReceived {
                                 text: observation.clone(),
@@ -731,35 +724,7 @@ impl Runtime {
                         }
                     }
                 }
-                Action::ListDir { path } => {
-                    let count = tool_counts.get_mut("list_dir").expect("count initialized");
-                    match retry_read(
-                        || {
-                            self.workspace
-                                .list_limited(&path, self.max_output_bytes)
-                                .map(|entries| entries.join("\n"))
-                                .map_err(|error| error.to_string())
-                        },
-                        count,
-                        self.max_per_tool,
-                        "list_dir",
-                    ) {
-                        Ok(entries) => ("list_dir", entries),
-                        Err(error) if error.starts_with("list_dir tool call limit") => {
-                            let observation = format!("error: {error}");
-                            self.events.push(Event::ObservationReceived {
-                                text: observation.clone(),
-                            });
-                            context.push_str("\nObservation: ");
-                            context.push_str(&observation);
-                            continue 'run;
-                        }
-                        Err(error) => {
-                            self.events.push(Event::Error { message: error });
-                            return State::Failed;
-                        }
-                    }
-                }
+
                 Action::Git { args } => {
                     let shell = match &self.shell {
                         Some(shell) => shell,

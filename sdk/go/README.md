@@ -131,8 +131,8 @@ be in `Manifest.Capabilities`. Runs and callbacks are not automatically
 retried, and a failed or timed-out run may already have side effects.
 
 The SDK limits each bridge stdout frame to 1 MiB including its newline and
-retains at most 64 KiB of stderr. `Events` and model observations arrive after
-the run; there is no live-event or progress-stream API. Treat them as
+continuously drains and discards stderr without retaining it. `Events` and model
+observations arrive after the run; there is no live-event or progress-stream API. Treat them as
 potentially sensitive. The SDK watchdog kills and reaps the direct bridge child
 on a deadline, but Go callbacks execute synchronously in the host process and
 cannot be forcibly interrupted. A handler that ignores its context keeps `Run`

@@ -1,6 +1,6 @@
 [package]
 name = "mote-agent"
-version = "0.14.1"
+version = "0.14.2"
 edition = "2021"
 default-run = "mote"
 description = "Minimal Orchestration & Task Execution"

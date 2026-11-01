@@ -80,9 +80,7 @@ class Client:
         # callback is running; the reader then applies backpressure to the pipe.
         outq = queue.Queue(maxsize=4)
         stop, expired = threading.Event(), threading.Event()
-        readers = [
-            threading.Thread(target=self._read_stdout, args=(proc.stdout, outq, stop), daemon=True),
-        ]
+        reader = threading.Thread(target=self._read_stdout, args=(proc.stdout, outq, stop), daemon=True)
         deadline = time.monotonic() + self.timeout
         def expire():
             expired.set()
@@ -90,8 +88,7 @@ class Client:
         watchdog = threading.Timer(self.timeout, expire)
         watchdog.daemon = True
         watchdog.start()
-        for reader in readers:
-            reader.start()
+        reader.start()
         terminal = None
         try:
             self._send(proc, {"type": "run", "protocol": 1, "manifest": manifest, "task": task,
@@ -157,8 +154,7 @@ class Client:
             stop.set()
             if proc.poll() is None:
                 self._kill(proc)
-            for reader in readers:
-                reader.join(timeout=.2)
+            reader.join(timeout=.2)
             for stream in (proc.stdin, proc.stdout):
                 try: stream.close()
                 except Exception: pass

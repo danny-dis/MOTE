@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 class DocumentationTests(unittest.TestCase):
     def test_relative_markdown_links_resolve(self):
         documents = set(ROOT.glob("*.md"))
-        for pattern in ("docs/**/*.md", "sdk/*/README.md", "starters/*/README.md", ".github/**/*.md"):
+        for pattern in ("docs/**/*.md", "tasks/**/*.md", "sdk/*/README.md", "starters/*/README.md", ".github/**/*.md"):
             documents.update(ROOT.glob(pattern))
         failures = []
         for document in sorted(documents):
