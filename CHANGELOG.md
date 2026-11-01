@@ -10,6 +10,8 @@ releases. SDK package versions and the bridge protocol have separate versions.
 - Exercise the declared SDK minimums in CI: Python 3.10, Node 20 and Go 1.22.
   Keep release tooling on Python 3.11, and extracted-release SDK checks on
   Python 3.11 and Node 22. Add a regression for this runtime separation.
+- List TypeScript test suites explicitly so Node 20 on Windows does not depend
+  on shell wildcard expansion; check that every SDK test file stays included.
 - Consolidate action capability names, file-read/directory-list retry handling,
   and provider authentication lookup without changing public APIs or permissions.
 - Remove unused Go stderr retention and the Python SDK's single-reader collection;

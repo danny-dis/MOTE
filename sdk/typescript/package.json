@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test dist/test/*.test.js",
+    "test": "npm run build && node --test dist/test/client.test.js dist/test/e2e.test.js dist/test/lifecycle.test.js",
     "pack:check": "npm run build && node scripts/check-package.mjs"
   },
   "devDependencies": {

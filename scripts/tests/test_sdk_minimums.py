@@ -9,6 +9,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class SDKMinimumTests(unittest.TestCase):
+    def test_typescript_command_lists_all_suites_without_shell_globs(self):
+        sdk = ROOT / "sdk/typescript"
+        command = json.loads((sdk / "package.json").read_text())["scripts"]["test"]
+        prefix = "npm run build && node --test "
+        self.assertTrue(command.startswith(prefix))
+        expected = sorted(
+            "dist/" + path.relative_to(sdk).with_suffix(".js").as_posix()
+            for path in (sdk / "test").rglob("*.test.ts")
+        )
+        self.assertTrue(expected, "SDK test suites must not be empty")
+        self.assertEqual(sorted(command.removeprefix(prefix).split()), expected)
+
     def test_ci_uses_declared_minimums_after_release_tooling(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         node = json.loads((ROOT / "sdk/typescript/package.json").read_text())["engines"]["node"].removeprefix(">=")
