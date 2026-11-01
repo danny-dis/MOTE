@@ -2,6 +2,13 @@
 
 ## Status and scope
 
+v0.14.2 is published as the latest GitHub release at `49e1d25`, with green
+cross-platform CI and verified downloaded archives. The updated website is
+prepared and locally checked; Vercel production deployment still requires
+account sign-in. See the [delivery receipt](release-0.14.2.md) for exact URLs,
+checksums, verification results and the remaining gate. The local evidence below
+is the historical preparation record, not the final delivery receipt.
+
 Maintenance release execution is authorized: commit and push the reviewed work,
 run CI/CD for v0.14.2, publish only after the required gates pass, and deploy the
 updated static Vercel page. The package candidate is now 0.14.2. Package-registry

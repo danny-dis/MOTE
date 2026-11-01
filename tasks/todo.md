@@ -4,6 +4,8 @@ Status: execution authorized for v0.14.2 CI/CD and the static Vercel page.
 Mark gates complete only after their actual verification receipts exist.
 Package-registry publishing and other live installations remain outside scope.
 Context: [plan.md](plan.md).
+Delivery: [v0.14.2 receipt](release-0.14.2.md). GitHub publication is complete;
+Vercel production deployment is blocked on account sign-in.
 
 ## 1. Freeze the maintenance candidate
 
@@ -13,8 +15,9 @@ Dependencies: none. Scope: source/test selection and review receipts.
       the exact current source hashes.
 - [x] Recheck Git status, upstream ancestry, every changed path and the independent
       agent checklist; preserve unrelated work outside the release selection.
-- [ ] Save the reviewed maintenance changes in an explicitly authorized commit.
-      Verify its paths, tree and parent; record the commit SHA.
+- [x] Save the reviewed maintenance changes in an explicitly authorized commit.
+      Verify its paths, tree and parent: `90dc159`; the reviewed Windows Node 20
+      test-launcher repair is `49e1d25`, the final release commit.
 
 Acceptance: the candidate contains only this maintenance work, with no unresolved
 verification failures or lost local work. Run GitNexus `detect_changes` before
@@ -39,17 +42,18 @@ merely to match the Rust release; bridge protocol remains v1.
 
 Dependencies: task 2. Scope: existing checks, documentation examples and receipts.
 
-- [ ] Review current release-command examples and SDK/security guidance. Keep the
-      website's latest-published badge at 0.14.1 until task 5.
-- [ ] Run Rust debug and release all-target tests, release binaries, both examples,
-      the starter tests, formatting, Clippy, docs and Cargo package validation.
-- [ ] Run all three SDK suites against the candidate bridge; verify TypeScript's
+- [x] Review current release-command examples and SDK/security guidance. The
+      0.14.2 website badge is prepared in source; deployment is a separate gate.
+- [x] Verify Rust debug and release all-target tests, release binaries, both examples,
+      starter tests, formatting, Clippy, docs and Cargo package validation in CI.
+- [x] Run all three SDK suites against the candidate bridge; verify TypeScript's
       installed-tarball declarations and Go vet/formatting.
-- [ ] Run all 12 release/documentation tooling tests and the dependency audit.
-- [ ] Verify declared minimum SDK runtimes: Python 3.10, Node 20 and Go 1.22.
+- [x] Run all 13 release/documentation tooling tests and the dependency audit.
+- [x] Verify declared minimum SDK runtimes: Python 3.10, Node 20 and Go 1.22.
       A newer toolchain's compatibility flags alone are not a runtime receipt.
-- [ ] After an authorized push, require complete Linux, Windows and macOS CI on
-      this exact candidate SHA. Recheck all failures and unhandled errors.
+- [x] After an authorized push, require complete Linux, Windows and macOS CI on
+      `49e1d25`. Run `41304158443` passed all four jobs. The preceding Windows
+      wildcard failure was reproduced, repaired, regression-tested and reviewed.
 
 Core commands (use the platform-appropriate bridge path):
 
@@ -82,9 +86,9 @@ relax production limits or call partial results green.
 Dependencies: task 3 and explicit permission to publish. Scope: the existing
 [release workflow](../.github/workflows/release.yml).
 
-- [ ] Verify the published branch SHA and a new annotated v0.14.2 tag target.
-- [ ] Start the tag-triggered workflow and require all checks before publication.
-- [ ] Require extracted-archive SDK tests for Windows x64 MSVC, Linux x64 and
+- [x] Verify the published branch SHA and a new annotated v0.14.2 tag target.
+- [x] Start the tag-triggered workflow and require all checks before publication.
+- [x] Require extracted-archive SDK tests for Windows x64 MSVC, Linux x64 and
       macOS Apple Silicon, plus the complete asset set and SHA256SUMS.
 
 Acceptance: a public, non-draft release exists at the intended commit, with the
@@ -95,10 +99,14 @@ expected archives and checksums. A tag push or successful build is not publicati
 Dependencies: task 4. Likely file: `site/public/index.html`, if its release label
 still needs updating.
 
-- [ ] Read back the public release, tag target and asset list; download and verify
+- [x] Read back the public release, tag target and asset list; download and verify
       archive checksums and CLI version/help from the extracted artifact.
-- [ ] Update the website's published-release badge to 0.14.2 only after verification.
-- [ ] Record the release URL, commit, CI and release runs, artifact checks, and the
+- [x] Prepare the website's 0.14.2 badge and release-notes link in source; verify
+      desktop/mobile rendering, the Go tab and captured console errors locally.
+- [ ] Deploy the verified website to the existing Vercel production project and
+      read back the public page and assets. Requires Vercel account sign-in;
+      the existing live page still advertises 0.13.1.
+- [x] Record the release URL, commit, CI and release runs, artifact checks, and the
       retained v0.14.1 rollback target. Do not alter running installations without
       separate deployment authorization.
 
